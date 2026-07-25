@@ -53,3 +53,4 @@ pyrightconfig.json
 generated_client/
 
 architecture/phases/
+architecture/assets/*.drawio

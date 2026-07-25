@@ -1,25 +1,5 @@
 # Generated Python Package
 
-A possible generated package structure is:
-
-```text
-generated_client/
-├── __init__.py
-├── client.py
-├── transport.py
-├── exceptions.py
-├── scalars.py
-├── enums.py
-├── inputs.py
-├── models.py
-└── operations/
-    ├── get_student.py
-    ├── create_student.py
-    └── delete_student.py
-```
-
----
-
 ## Generated Models
 
 Example GraphQL type:

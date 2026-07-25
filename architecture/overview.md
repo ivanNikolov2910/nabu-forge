@@ -24,11 +24,7 @@ The main goal of Nabu Forge is to translate GraphQL definitions into usable Pyth
 The general transformation is:
 
 ```text
-GraphQL SDL and operations
-            ↓
-       Nabu Forge
-            ↓
-Typed Python client package
+GraphQL SDL and operations -> Nabu Forge -> Typed Python client package
 ```
 
 The generated package should allow developers to work with a GraphQL API through typed Python methods rather than manually constructing GraphQL requests and processing raw dictionaries.

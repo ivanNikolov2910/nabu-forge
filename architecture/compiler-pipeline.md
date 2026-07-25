@@ -2,25 +2,7 @@
 
 The proposed compiler pipeline is:
 
-```text
-GraphQL SDL
-    ↓
-graphql-core
-    ↓
-GraphQL AST
-    ↓
-Symbol table
-    ↓
-Semantic analysis
-    ↓
-Custom intermediate representation
-    ↓
-Python type mapping
-    ↓
-Code generation
-    ↓
-Generated Python client package
-```
+<img src="./assets/compiler-pipeline.drawio.png" alt="Compiler Pipeline" width="600" />
 
 Each stage has a specific responsibility.
 
@@ -130,17 +112,7 @@ type User {
 
 may be represented as:
 
-```text
-ObjectTypeDefinition
-├── name: User
-└── fields
-    ├── FieldDefinition
-    │   ├── name: id
-    │   └── type: NonNull(ID)
-    └── FieldDefinition
-        ├── name: name
-        └── type: String
-```
+<img src="./assets/ast.drawio.png" alt="AST" width="400" />
 
 The AST represents the syntax and structure of the GraphQL document.
 
@@ -292,17 +264,7 @@ The IR separates GraphQL-specific parsing concerns from Python-specific generati
 
 This makes the architecture easier to test and extend.
 
-Future backends could reuse the same IR:
-
-```text
-GraphQL frontend
-        ↓
-   Shared IR
-    ├── Python backend
-    ├── TypeScript backend
-    ├── Java backend
-    └── C# backend
-```
+Future backends could reuse the same IR.
 
 ---
 
