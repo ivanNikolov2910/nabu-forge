@@ -1,0 +1,42 @@
+fragment StudentBase on Student {
+    id
+    name
+    email
+    status
+}
+
+fragment CourseBase on Course {
+    id
+    code
+    title
+    credits
+    status
+}
+
+fragment InstructorBase on Instructor {
+    id
+    name
+    email
+    department
+}
+
+query GetCourseWithFragments($id: ID!) {
+    course(id: $id) {
+        ...CourseBase
+        instructor {
+            ...InstructorBase
+        }
+        enrolledStudents {
+            ...StudentBase
+        }
+    }
+}
+
+query GetStudentWithFragments($id: ID!) {
+    student(id: $id) {
+        ...StudentBase
+        enrolledCourses {
+            ...CourseBase
+        }
+    }
+}

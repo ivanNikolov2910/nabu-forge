@@ -1,0 +1,7 @@
+schema = "schema.graphqls"
+operations = "operations/"
+output = "generated_client"
+
+[scalars]
+DateTime = "datetime.datetime"
+URL = "str"

@@ -1,0 +1,8 @@
+query ListStudents($filter: StudentsFilter, $limit: Int, $offset: Int) {
+    students(filter: $filter, limit: $limit, offset: $offset) {
+        id
+        name
+        email
+        status
+    }
+}

@@ -1,0 +1,14 @@
+query GetStudent($id: ID!) {
+    student(id: $id) {
+        id
+        name
+        email
+        status
+        enrolledCourses {
+            id
+            code
+            title
+            credits
+        }
+    }
+}

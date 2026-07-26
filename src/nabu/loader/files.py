@@ -9,22 +9,26 @@ def verify_paths(config: Config, base: Path, reporter: DiagnosticReporter) -> bo
 
     schema = base / config.schema
     if not schema.exists():
-        reporter.add(Diagnostic(
-            code="E010",
-            severity="error",
-            message=f"Schema file not found: {schema}",
-            file=str(schema),
-        ))
+        reporter.add(
+            Diagnostic(
+                code="E010",
+                severity="error",
+                message=f"Schema file not found: {schema}",
+                file=str(schema),
+            )
+        )
         ok = False
 
     ops = base / config.operations
     if not ops.exists():
-        reporter.add(Diagnostic(
-            code="E011",
-            severity="error",
-            message=f"Operations directory not found: {ops}",
-            file=str(ops),
-        ))
+        reporter.add(
+            Diagnostic(
+                code="E011",
+                severity="error",
+                message=f"Operations directory not found: {ops}",
+                file=str(ops),
+            )
+        )
         ok = False
 
     return ok

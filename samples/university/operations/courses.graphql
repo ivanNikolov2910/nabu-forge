@@ -1,0 +1,36 @@
+query GetCourse($id: ID!) {
+    course(id: $id) {
+        id
+        code
+        title
+        description
+        credits
+        status
+        instructor {
+            id
+            name
+            email
+            department
+        }
+        enrolledStudents {
+            id
+            name
+            email
+            status
+        }
+    }
+}
+
+query ListCourses($filter: CoursesFilter, $limit: Int, $offset: Int) {
+    courses(filter: $filter, limit: $limit, offset: $offset) {
+        id
+        code
+        title
+        credits
+        status
+        instructor {
+            id
+            name
+        }
+    }
+}

@@ -1,0 +1,80 @@
+mutation CreateUndergraduateStudent($input: CreateUndergraduateStudentInput!) {
+    createUndergraduateStudent(input: $input) {
+        id
+        name
+        email
+        status
+        major
+        expectedGraduationYear
+        createdAt
+    }
+}
+
+mutation CreateGraduateStudent($input: CreateGraduateStudentInput!) {
+    createGraduateStudent(input: $input) {
+        id
+        name
+        email
+        status
+        department
+        thesisTitle
+        supervisor {
+            id
+            name
+        }
+        createdAt
+    }
+}
+
+mutation CreateCourse($input: CreateCourseInput!) {
+    createCourse(input: $input) {
+        id
+        code
+        title
+        credits
+        status
+        instructor {
+            id
+            name
+        }
+        createdAt
+    }
+}
+
+mutation EnrollStudent($input: EnrollStudentInput!) {
+    enrollStudent(input: $input) {
+        id
+        code
+        title
+        enrolledStudents {
+            id
+            name
+            status
+        }
+    }
+}
+
+mutation SubmitGrade($input: SubmitGradeInput!) {
+    submitGrade(input: $input) {
+        id
+        value
+        submittedAt
+        student {
+            id
+            name
+        }
+        course {
+            id
+            code
+            title
+        }
+    }
+}
+
+mutation WithdrawStudent($studentId: ID!) {
+    withdrawStudent(studentId: $studentId) {
+        id
+        name
+        status
+    }
+}
