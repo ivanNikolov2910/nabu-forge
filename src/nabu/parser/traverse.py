@@ -3,11 +3,7 @@ from dataclasses import dataclass
 from graphql.type.definition import *
 from graphql.type.schema import GraphQLSchema
 
-_BUILTIN_SCALARS = {"String", "Int", "Float", "Boolean", "ID"}
-
-
-def _is_builtin(name: str) -> bool:
-    return name.startswith("__") or name in _BUILTIN_SCALARS
+from nabu.config.types import is_builtin_scalar, root_type_names
 
 
 @dataclass
@@ -31,15 +27,12 @@ def summarise(schema: GraphQLSchema) -> SchemaSummary:
         [],
         [],
     )
+    root_types = root_type_names(schema)
 
     for name, named_type in schema.type_map.items():
-        if _is_builtin(name):
+        if is_builtin_scalar(name) or name in root_types:
             continue
-        if isinstance(named_type, GraphQLObjectType) and name not in (
-            "Query",
-            "Mutation",
-            "Subscription",
-        ):
+        if isinstance(named_type, GraphQLObjectType):
             object_types.append(name)
         elif isinstance(named_type, GraphQLInputObjectType):
             input_types.append(name)

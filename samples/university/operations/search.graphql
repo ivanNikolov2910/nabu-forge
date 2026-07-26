@@ -4,14 +4,14 @@ query Search($query: String!) {
             id
             name
             email
-            status
+            enrollmentStatus: status
             major
         }
         ... on GraduateStudent {
             id
             name
             email
-            status
+            enrollmentStatus: status
             department
             thesisTitle
         }
@@ -20,7 +20,7 @@ query Search($query: String!) {
             code
             title
             credits
-            status
+            courseStatus: status
         }
         ... on Instructor {
             id

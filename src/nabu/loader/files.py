@@ -1,7 +1,8 @@
 from pathlib import Path
 
 from nabu.config import Config
-from nabu.diagnostics import Diagnostic, DiagnosticReporter, ErrorCode
+from nabu.diagnostics.codes import ErrorCode
+from nabu.diagnostics.reporter import Diagnostic, DiagnosticReporter
 
 
 def verify_paths(config: Config, base: Path, reporter: DiagnosticReporter) -> bool:

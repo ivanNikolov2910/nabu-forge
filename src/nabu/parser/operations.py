@@ -2,7 +2,8 @@ from pathlib import Path
 
 from graphql import DocumentNode, GraphQLSchema, GraphQLSyntaxError, parse, validate
 
-from nabu.diagnostics import Diagnostic, DiagnosticReporter, ErrorCode
+from nabu.diagnostics.codes import ErrorCode
+from nabu.diagnostics.reporter import Diagnostic, DiagnosticReporter
 
 
 def parse_operations(

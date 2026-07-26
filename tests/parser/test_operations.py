@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from nabu.diagnostics import DiagnosticReporter, ErrorCode
+from nabu.diagnostics.codes import ErrorCode
+from nabu.diagnostics.reporter import DiagnosticReporter
 from nabu.parser.operations import parse_operations
 from nabu.parser.schema import parse_schema
 

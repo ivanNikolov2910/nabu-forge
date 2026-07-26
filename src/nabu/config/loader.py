@@ -2,9 +2,9 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-from nabu.diagnostics import Diagnostic, DiagnosticReporter, ErrorCode
-
-_REQUIRED_FIELDS = ("schema", "operations", "output")
+from nabu.config.types import REQUIRED_FIELDS
+from nabu.diagnostics.codes import ErrorCode
+from nabu.diagnostics.reporter import Diagnostic, DiagnosticReporter
 
 
 @dataclass
@@ -28,7 +28,7 @@ def load_config(path: Path, reporter: DiagnosticReporter) -> Config | None:
     with path.open("rb") as f:
         data = tomllib.load(f)
 
-    missing = [k for k in _REQUIRED_FIELDS if k not in data]
+    missing = [k for k in REQUIRED_FIELDS if k not in data]
     if missing:
         reporter.add(
             Diagnostic(

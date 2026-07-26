@@ -2,7 +2,8 @@ from pathlib import Path
 
 from graphql import GraphQLSchema, GraphQLSyntaxError, build_schema
 
-from nabu.diagnostics import Diagnostic, DiagnosticReporter, ErrorCode
+from nabu.diagnostics.codes import ErrorCode
+from nabu.diagnostics.reporter import Diagnostic, DiagnosticReporter
 
 
 def parse_schema(path: Path, reporter: DiagnosticReporter) -> GraphQLSchema | None:
