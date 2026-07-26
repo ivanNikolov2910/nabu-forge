@@ -1,0 +1,199 @@
+# --- Scalars ---
+
+scalar DateTime
+scalar URL
+
+# --- Enums ---
+
+enum EnrollmentStatus {
+    ENROLLED
+    ACTIVE
+    GRADUATED
+    WITHDRAWN
+}
+
+enum CourseStatus {
+    OPEN
+    FULL
+    CANCELLED
+    COMPLETED
+}
+
+enum GradeValue {
+    A
+    B
+    C
+    D
+    F
+    INCOMPLETE
+    WITHDRAWN
+}
+
+# --- Interfaces ---
+
+interface Node {
+    id: ID!
+}
+
+interface Timestamped {
+    createdAt: DateTime!
+    updatedAt: DateTime!
+}
+
+interface Student implements Node & Timestamped {
+    id: ID!
+    name: String!
+    email: String!
+    status: EnrollmentStatus!
+    enrolledCourses: [Course!]!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+}
+
+type UndergraduateStudent implements Student & Node & Timestamped {
+    id: ID!
+    name: String!
+    email: String!
+    status: EnrollmentStatus!
+    major: String!
+    expectedGraduationYear: Int!
+    enrolledCourses: [Course!]!
+    grades: [Grade!]!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+}
+
+type GraduateStudent implements Student & Node & Timestamped {
+    id: ID!
+    name: String!
+    email: String!
+    status: EnrollmentStatus!
+    department: String!
+    thesisTitle: String
+    supervisor: Instructor
+    enrolledCourses: [Course!]!
+    grades: [Grade!]!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+}
+
+type Instructor implements Node & Timestamped {
+    id: ID!
+    name: String!
+    email: String!
+    department: String!
+    courses: [Course!]!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+}
+
+type Course implements Node & Timestamped {
+    id: ID!
+    code: String!
+    title: String!
+    description: String
+    credits: Int!
+    status: CourseStatus!
+    instructor: Instructor!
+    enrolledStudents: [Student!]!
+    createdAt: DateTime!
+    updatedAt: DateTime!
+}
+
+type Grade implements Node {
+    id: ID!
+    student: Student!
+    course: Course!
+    value: GradeValue!
+    submittedAt: DateTime!
+}
+
+type Department implements Node {
+    id: ID!
+    name: String!
+    head: Instructor
+    instructors: [Instructor!]!
+    courses: [Course!]!
+}
+
+# --- Union ---
+
+union SearchResult = UndergraduateStudent | GraduateStudent | Course | Instructor
+
+# --- Input types ---
+
+input EnrollStudentInput {
+    studentId: ID!
+    courseId: ID!
+}
+
+input CreateCourseInput {
+    code: String!
+    title: String!
+    description: String
+    credits: Int!
+    instructorId: ID!
+}
+
+input CreateInstructorInput {
+    name: String!
+    email: String!
+    department: String!
+}
+
+input CreateUndergraduateStudentInput {
+    name: String!
+    email: String!
+    major: String!
+    expectedGraduationYear: Int!
+}
+
+input CreateGraduateStudentInput {
+    name: String!
+    email: String!
+    department: String!
+    thesisTitle: String
+    supervisorId: ID
+}
+
+input SubmitGradeInput {
+    studentId: ID!
+    courseId: ID!
+    value: GradeValue!
+}
+
+input StudentsFilter {
+    status: EnrollmentStatus
+    courseId: ID
+}
+
+input CoursesFilter {
+    status: CourseStatus
+    instructorId: ID
+    departmentId: ID
+}
+
+# --- Query ---
+
+type Query {
+    student(id: ID!): Student
+    students(filter: StudentsFilter, limit: Int, offset: Int): [Student!]!
+    course(id: ID!): Course
+    courses(filter: CoursesFilter, limit: Int, offset: Int): [Course!]!
+    instructor(id: ID!): Instructor
+    department(id: ID!): Department
+    grade(id: ID!): Grade
+    search(query: String!): [SearchResult!]!
+}
+
+# --- Mutation ---
+
+type Mutation {
+    createUndergraduateStudent(input: CreateUndergraduateStudentInput!): UndergraduateStudent!
+    createGraduateStudent(input: CreateGraduateStudentInput!): GraduateStudent!
+    createCourse(input: CreateCourseInput!): Course!
+    createInstructor(input: CreateInstructorInput!): Instructor!
+    enrollStudent(input: EnrollStudentInput!): Course!
+    submitGrade(input: SubmitGradeInput!): Grade!
+    withdrawStudent(studentId: ID!): Student!
+}

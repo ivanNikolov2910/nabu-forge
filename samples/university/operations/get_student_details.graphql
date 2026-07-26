@@ -1,0 +1,38 @@
+query GetStudentDetails($id: ID!) {
+    student(id: $id) {
+        id
+        name
+        email
+        status
+        ... on UndergraduateStudent {
+            major
+            expectedGraduationYear
+            grades {
+                id
+                value
+                course {
+                    id
+                    code
+                    title
+                }
+            }
+        }
+        ... on GraduateStudent {
+            department
+            thesisTitle
+            supervisor {
+                id
+                name
+            }
+            grades {
+                id
+                value
+                course {
+                    id
+                    code
+                    title
+                }
+            }
+        }
+    }
+}
