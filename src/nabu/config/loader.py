@@ -2,7 +2,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-from nabu.diagnostics import Diagnostic, DiagnosticReporter
+from nabu.diagnostics import Diagnostic, DiagnosticReporter, ErrorCode
 
 _REQUIRED_FIELDS = ("schema", "operations", "output")
 
@@ -18,7 +18,7 @@ def load_config(path: Path, reporter: DiagnosticReporter) -> Config | None:
     if not path.exists():
         reporter.add(
             Diagnostic(
-                code="E001",
+                code=ErrorCode.CONFIG_NOT_FOUND,
                 severity="error",
                 message=f"Config file not found: {path}",
             )
@@ -32,7 +32,7 @@ def load_config(path: Path, reporter: DiagnosticReporter) -> Config | None:
     if missing:
         reporter.add(
             Diagnostic(
-                code="E002",
+                code=ErrorCode.CONFIG_MISSING_FIELDS,
                 severity="error",
                 message=f"Missing required fields in {path}: {', '.join(missing)}",
                 file=str(path),

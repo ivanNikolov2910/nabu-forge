@@ -1,10 +1,12 @@
 import sys
 from dataclasses import dataclass
 
+from nabu.diagnostics.codes import ErrorCode
+
 
 @dataclass
 class Diagnostic:
-    code: str
+    code: ErrorCode
     severity: str
     message: str
     file: str | None = None

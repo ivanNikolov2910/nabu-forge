@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from nabu.config import Config
-from nabu.diagnostics import Diagnostic, DiagnosticReporter
+from nabu.diagnostics import Diagnostic, DiagnosticReporter, ErrorCode
 
 
 def verify_paths(config: Config, base: Path, reporter: DiagnosticReporter) -> bool:
@@ -11,7 +11,7 @@ def verify_paths(config: Config, base: Path, reporter: DiagnosticReporter) -> bo
     if not schema.exists():
         reporter.add(
             Diagnostic(
-                code="E010",
+                code=ErrorCode.CONFIG_NOT_FOUND,
                 severity="error",
                 message=f"Schema file not found: {schema}",
                 file=str(schema),
@@ -23,7 +23,7 @@ def verify_paths(config: Config, base: Path, reporter: DiagnosticReporter) -> bo
     if not ops.exists():
         reporter.add(
             Diagnostic(
-                code="E011",
+                code=ErrorCode.CONFIG_NOT_FOUND,
                 severity="error",
                 message=f"Operations directory not found: {ops}",
                 file=str(ops),
