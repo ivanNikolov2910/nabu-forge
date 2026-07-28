@@ -56,4 +56,3 @@ architecture/phases/
 architecture/assets/*.drawio
 
 samples/euporie/
-debug-symbols.json

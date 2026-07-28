@@ -7,9 +7,7 @@ from nabu.diagnostics.reporter import Diagnostic, DiagnosticReporter
 
 
 def parse_operations(
-    paths: list[Path],
-    schema: GraphQLSchema,
-    reporter: DiagnosticReporter,
+    paths: list[Path], schema: GraphQLSchema, reporter: DiagnosticReporter
 ) -> list[DocumentNode]:
     documents: list[DocumentNode] = []
 

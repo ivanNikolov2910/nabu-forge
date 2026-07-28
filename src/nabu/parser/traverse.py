@@ -1,6 +1,13 @@
 from dataclasses import dataclass
 
-from graphql.type.definition import *
+from graphql.type.definition import (
+    GraphQLEnumType,
+    GraphQLInputObjectType,
+    GraphQLInterfaceType,
+    GraphQLObjectType,
+    GraphQLScalarType,
+    GraphQLUnionType,
+)
 from graphql.type.schema import GraphQLSchema
 
 from nabu.config.types import is_builtin_scalar, root_type_names
@@ -19,15 +26,13 @@ class SchemaSummary:
 
 
 def summarise(schema: GraphQLSchema) -> SchemaSummary:
-    object_types, input_types, enums, scalars, interfaces, unions = (
-        [],
-        [],
-        [],
-        [],
-        [],
-        [],
-    )
     root_types = root_type_names(schema)
+    object_types = []
+    input_types = []
+    enums = []
+    scalars = []
+    interfaces = []
+    unions = []
 
     for name, named_type in schema.type_map.items():
         if is_builtin_scalar(name) or name in root_types:
