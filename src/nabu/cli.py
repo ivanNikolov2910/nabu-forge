@@ -7,15 +7,29 @@ from typing import Annotated
 
 import typer
 
-from nabu.config import load_config
+from nabu.context import CompilerContext
 from nabu.diagnostics.reporter import DiagnosticReporter
-from nabu.loader.files import list_operation_files, verify_paths
 from nabu.model.symbol_table import SymbolTable, dependency_order
-from nabu.parser.operations import parse_operations
 from nabu.parser.schema import parse_schema
 from nabu.parser.traverse import summarise
 
 app = typer.Typer(no_args_is_help=True)
+
+
+# TODO: Remove this, it is only used for debugging.
+class _SymbolTableEncoder(json.JSONEncoder):
+    def default(self, o: object) -> object:
+        if isinstance(o, SymbolTable):
+            return {
+                "symbols": o.symbols,
+                "operations": {op.name: op for op in o.all_operations()},
+                "dependency_order": dependency_order(o),
+            }
+        if dataclasses.is_dataclass(o) and not isinstance(o, type):
+            return dataclasses.asdict(o)
+        if isinstance(o, Enum):
+            return o.value
+        return super().default(o)
 
 
 @app.command()
@@ -32,13 +46,9 @@ def validate(
         ),
     ] = Path("nabu.toml"),
 ) -> None:
-    reporter = DiagnosticReporter()
-    config = load_config(config_path, reporter)
-    reporter.exit_if_errors()
-
-    verify_paths(config, config_path.parent, reporter)
-    reporter.exit_if_errors()
-
+    ctx = CompilerContext(config_path)
+    ctx.load()
+    ctx.verify()
     typer.echo("OK")
 
 
@@ -49,8 +59,7 @@ def inspect(
     ],
 ) -> None:
     reporter = DiagnosticReporter()
-    parsed = parse_schema(schema, reporter)
-    reporter.exit_if_errors()
+    parsed = reporter.collect(parse_schema(schema))
 
     if parsed is None:
         return
@@ -66,6 +75,25 @@ def inspect(
     typer.echo(f"  Unions       : {len(summary.unions)}")
     typer.echo(f"  Queries      : {len(summary.queries)}")
     typer.echo(f"  Mutations    : {len(summary.mutations)}")
+
+
+# TODO: Remove this, it is only used for debugging.
+@app.command("debug-symbols")
+def debug_symbols(
+    config_path: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to nabu.toml."),
+    ] = Path("nabu.toml"),
+) -> None:
+    ctx = CompilerContext(config_path)
+    ctx.load()
+    schema = ctx.parse_schema()
+    documents = ctx.parse_operations(schema)
+    table = ctx.build_symbols(schema, documents)
+
+    out_path = Path("debug-symbols.json")
+    out_path.write_text(json.dumps(table, indent=2, cls=_SymbolTableEncoder))
+    typer.echo(f"Written to {out_path.resolve()}")
 
 
 def main() -> None:

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from graphql import (
     DocumentNode,
     FieldNode,
@@ -15,7 +17,8 @@ from graphql import (
 
 from nabu.config.types import BUILTIN_SCALARS, is_builtin_scalar, root_type_names
 from nabu.diagnostics.codes import ErrorCode
-from nabu.diagnostics.reporter import Diagnostic, DiagnosticReporter
+from nabu.diagnostics.diagnostic import Diagnostic
+from nabu.diagnostics.result import Result
 from nabu.model.symbols import (
     EnumTypeSymbol,
     FieldSymbol,
@@ -67,7 +70,7 @@ def _build_variable(var_node) -> VariableSymbol:
 
 
 def _schema_to_symbols(
-    schema: GraphQLSchema, reporter: DiagnosticReporter
+    schema: GraphQLSchema, diagnostics: list[Diagnostic]
 ) -> dict[str, Symbol]:
     symbols: dict[str, Symbol] = {}
     root_types = root_type_names(schema)
@@ -77,9 +80,9 @@ def _schema_to_symbols(
             continue
 
         if name in symbols:
-            reporter.add(
+            diagnostics.append(
                 Diagnostic(
-                    code=ErrorCode.CONFIG_DUPLICATION_FIELDS,
+                    code=ErrorCode.DUPLICATE_TYPE,
                     severity="error",
                     message=f"Duplicate type definition: {name}",
                 )
@@ -116,10 +119,9 @@ def _schema_to_symbols(
 
 def _documents_to_operations(
     documents: list[DocumentNode],
-    existing: dict[str, OperationSymbol],
-    reporter: DiagnosticReporter,
+    diagnostics: list[Diagnostic],
 ) -> dict[str, OperationSymbol]:
-    operations: dict[str, OperationSymbol] = dict(existing)
+    operations: dict[str, OperationSymbol] = {}
 
     for doc in documents:
         for node in doc.definitions:
@@ -127,9 +129,9 @@ def _documents_to_operations(
                 continue
             name = node.name.value if node.name else "<anonymous>"
             if name in operations:
-                reporter.add(
+                diagnostics.append(
                     Diagnostic(
-                        code=ErrorCode.CONFIG_DUPLICATION_FIELDS,
+                        code=ErrorCode.DUPLICATE_OPERATION,
                         severity="error",
                         message=f"Duplicate operation name: {name}",
                     )
@@ -151,7 +153,7 @@ def _documents_to_operations(
     return operations
 
 
-def dependency_order(table: "SymbolTable") -> list[str]:
+def dependency_order(table: SymbolTable) -> list[str]:
     dependencies: dict[str, set[str]] = {}
     for name, symbol in table.symbols.items():
         if isinstance(symbol, (ObjectTypeSymbol, InputTypeSymbol, InterfaceTypeSymbol)):
@@ -187,13 +189,19 @@ def dependency_order(table: "SymbolTable") -> list[str]:
 
 class SymbolTable:
     def __init__(
-        self,
-        schema: GraphQLSchema,
-        documents: list[DocumentNode],
-        reporter: DiagnosticReporter,
+        self, symbols: dict[str, Symbol], operations: dict[str, OperationSymbol]
     ) -> None:
-        self._symbols = _schema_to_symbols(schema, reporter)
-        self._operations = _documents_to_operations(documents, {}, reporter)
+        self._symbols = symbols
+        self._operations = operations
+
+    @classmethod
+    def build(
+        cls, schema: GraphQLSchema, documents: list[DocumentNode]
+    ) -> Result[SymbolTable]:
+        diagnostics: list[Diagnostic] = []
+        symbols = _schema_to_symbols(schema, diagnostics)
+        operations = _documents_to_operations(documents, diagnostics)
+        return Result(value=cls(symbols, operations), diagnostics=diagnostics)
 
     def get(self, name: str) -> Symbol | None:
         return self._symbols.get(name)
@@ -238,5 +246,5 @@ class SymbolTable:
         return list(self._operations.values())
 
     @property
-    def symbols(self):
+    def symbols(self) -> dict[str, Symbol]:
         return self._symbols

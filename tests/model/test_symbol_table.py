@@ -1,7 +1,6 @@
 import pytest
 from graphql import OperationType, build_schema
 
-from nabu.diagnostics.reporter import DiagnosticReporter
 from nabu.model.symbol_table import SymbolTable, dependency_order
 from nabu.model.symbols import (
     EnumTypeSymbol,
@@ -77,9 +76,8 @@ def schema():
 def table(schema, tmp_path):
     op = tmp_path / "get_student.graphql"
     op.write_text(OPERATION)
-    reporter = DiagnosticReporter()
-    docs = parse_operations([op], schema, reporter)
-    return SymbolTable(schema, docs, DiagnosticReporter())
+    docs = parse_operations([op], schema).value
+    return SymbolTable.build(schema, docs).value
 
 
 def test_object_type_registered(table):
@@ -176,11 +174,9 @@ def test_duplicate_operation(schema, tmp_path):
     op2 = tmp_path / "b.graphql"
     op1.write_text(OPERATION)
     op2.write_text(OPERATION)
-    reporter = DiagnosticReporter()
-    docs = parse_operations([op1, op2], schema, reporter)
-    dup_reporter = DiagnosticReporter()
-    table = SymbolTable(schema, docs, dup_reporter)
-    assert dup_reporter.has_errors()
+    docs = parse_operations([op1, op2], schema).value
+    result = SymbolTable.build(schema, docs)
+    assert result.failed
 
 
 def test_dependency_order(table):

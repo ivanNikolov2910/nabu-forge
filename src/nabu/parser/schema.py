@@ -3,22 +3,28 @@ from pathlib import Path
 from graphql import GraphQLSchema, GraphQLSyntaxError, build_schema
 
 from nabu.diagnostics.codes import ErrorCode
-from nabu.diagnostics.reporter import Diagnostic, DiagnosticReporter
+from nabu.diagnostics.diagnostic import Diagnostic
+from nabu.diagnostics.result import Result
 
 
-def parse_schema(path: Path, reporter: DiagnosticReporter) -> GraphQLSchema | None:
+def parse_schema(path: Path) -> Result[GraphQLSchema]:
     source = path.read_text(encoding="utf-8")
     try:
-        return build_schema(source)
+        return Result(value=build_schema(source))
     except GraphQLSyntaxError as e:
-        reporter.add(
-            Diagnostic(
-                code=ErrorCode.PARSER_SYNTAX_ERROR,
-                severity="error",
-                message=e.message,
-                file=str(path),
-                line=e.locations[0].line if e.locations else None,
-                column=e.locations[0].column if e.locations else None,
-            )
+        return Result(
+            diagnostics=[
+                Diagnostic.from_graphql_error(e, ErrorCode.PARSER_SYNTAX_ERROR, path)
+            ]
         )
-        return None
+    except TypeError as e:
+        return Result(
+            diagnostics=[
+                Diagnostic(
+                    code=ErrorCode.PARSER_VALIDATION_ERROR,
+                    severity="error",
+                    message=str(e),
+                    file=str(path),
+                )
+            ]
+        )

@@ -3,13 +3,15 @@ from pathlib import Path
 from graphql import DocumentNode, GraphQLSchema, GraphQLSyntaxError, parse, validate
 
 from nabu.diagnostics.codes import ErrorCode
-from nabu.diagnostics.reporter import Diagnostic, DiagnosticReporter
+from nabu.diagnostics.diagnostic import Diagnostic
+from nabu.diagnostics.result import Result
 
 
 def parse_operations(
-    paths: list[Path], schema: GraphQLSchema, reporter: DiagnosticReporter
-) -> list[DocumentNode]:
+    paths: list[Path], schema: GraphQLSchema
+) -> Result[list[DocumentNode]]:
     documents: list[DocumentNode] = []
+    diagnostics: list[Diagnostic] = []
 
     for path in paths:
         source = path.read_text(encoding="utf-8")
@@ -17,33 +19,21 @@ def parse_operations(
         try:
             document = parse(source)
         except GraphQLSyntaxError as e:
-            reporter.add(
-                Diagnostic(
-                    code=ErrorCode.PARSER_SYNTAX_ERROR,
-                    severity="error",
-                    message=e.message,
-                    file=str(path),
-                    line=e.locations[0].line if e.locations else None,
-                    column=e.locations[0].column if e.locations else None,
-                )
+            diagnostics.append(
+                Diagnostic.from_graphql_error(e, ErrorCode.PARSER_SYNTAX_ERROR, path)
             )
             continue
 
         errors = validate(schema, document)
         if errors:
-            for e in errors:
-                reporter.add(
-                    Diagnostic(
-                        code=ErrorCode.PARSER_VALIDATION_ERROR,
-                        severity="error",
-                        message=e.message,
-                        file=str(path),
-                        line=e.locations[0].line if e.locations else None,
-                        column=e.locations[0].column if e.locations else None,
-                    )
+            diagnostics.extend(
+                Diagnostic.from_graphql_error(
+                    e, ErrorCode.PARSER_VALIDATION_ERROR, path
                 )
+                for e in errors
+            )
             continue
 
         documents.append(document)
 
-    return documents
+    return Result(value=documents, diagnostics=diagnostics)

@@ -2,37 +2,36 @@ from pathlib import Path
 
 from nabu.config import Config
 from nabu.diagnostics.codes import ErrorCode
-from nabu.diagnostics.reporter import Diagnostic, DiagnosticReporter
+from nabu.diagnostics.diagnostic import Diagnostic
+from nabu.diagnostics.result import Result
 
 
-def verify_paths(config: Config, base: Path, reporter: DiagnosticReporter) -> bool:
-    ok = True
+def verify_paths(config: Config, base: Path) -> Result[None]:
+    diagnostics = []
 
     schema = base / config.schema
     if not schema.exists():
-        reporter.add(
+        diagnostics.append(
             Diagnostic(
-                code=ErrorCode.CONFIG_NOT_FOUND,
+                code=ErrorCode.SCHEMA_PATH_NOT_FOUND,
                 severity="error",
                 message=f"Schema file not found: {schema}",
                 file=str(schema),
             )
         )
-        ok = False
 
     ops = base / config.operations
     if not ops.exists():
-        reporter.add(
+        diagnostics.append(
             Diagnostic(
-                code=ErrorCode.CONFIG_NOT_FOUND,
+                code=ErrorCode.OPERATIONS_PATH_NOT_FOUND,
                 severity="error",
                 message=f"Operations directory not found: {ops}",
                 file=str(ops),
             )
         )
-        ok = False
 
-    return ok
+    return Result(value=None, diagnostics=diagnostics)
 
 
 def list_operation_files(config: Config, base: Path) -> list[Path]:

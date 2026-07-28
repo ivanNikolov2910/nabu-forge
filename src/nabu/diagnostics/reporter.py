@@ -1,30 +1,10 @@
 import sys
-from dataclasses import dataclass
+from typing import TypeVar
 
-from nabu.diagnostics.codes import ErrorCode
+from nabu.diagnostics.diagnostic import Diagnostic
+from nabu.diagnostics.result import Result
 
-
-@dataclass
-class Diagnostic:
-    code: ErrorCode
-    severity: str
-    message: str
-    file: str | None = None
-    line: int | None = None
-    column: int | None = None
-    hint: str | None = None
-
-    def __str__(self) -> str:
-        location = ""
-        if self.file:
-            location = self.file
-            if self.line is not None:
-                location += f":{self.line}"
-                if self.column is not None:
-                    location += f":{self.column}"
-            location += ": "
-        hint = f"\n  hint: {self.hint}" if self.hint else ""
-        return f"{location}[{self.code}] {self.severity}: {self.message}{hint}"
+T = TypeVar("T")
 
 
 class DiagnosticReporter:
@@ -34,6 +14,12 @@ class DiagnosticReporter:
     def add(self, diagnostic: Diagnostic) -> None:
         self._diagnostics.append(diagnostic)
         print(str(diagnostic), file=sys.stderr)
+
+    def collect(self, result: Result[T]) -> T | None:
+        for diagnostic in result.diagnostics:
+            self.add(diagnostic)
+        self.exit_if_errors()
+        return result.value
 
     def has_errors(self) -> bool:
         return any(d.severity == "error" for d in self._diagnostics)
