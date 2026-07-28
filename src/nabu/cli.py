@@ -17,7 +17,7 @@ app = typer.Typer(no_args_is_help=True)
 
 
 # TODO: Remove this, it is only used for debugging.
-class _SymbolTableEncoder(json.JSONEncoder):
+class _DebugEncoder(json.JSONEncoder):
     def default(self, o: object) -> object:
         if isinstance(o, SymbolTable):
             return {
@@ -92,7 +92,26 @@ def debug_symbols(
     table = ctx.build_symbols(schema, documents)
 
     out_path = Path("debug-symbols.json")
-    out_path.write_text(json.dumps(table, indent=2, cls=_SymbolTableEncoder))
+    out_path.write_text(json.dumps(table, indent=2, cls=_DebugEncoder))
+    typer.echo(f"Written to {out_path.resolve()}")
+
+
+# TODO: Remove this, it is only used for debugging.
+@app.command("debug-ir")
+def debug_ir(
+    config_path: Annotated[
+        Path,
+        typer.Option("--config", "-c", help="Path to nabu.toml."),
+    ] = Path("nabu.toml"),
+) -> None:
+    ctx = CompilerContext(config_path)
+    ctx.load()
+    schema = ctx.parse_schema()
+    documents = ctx.parse_operations(schema)
+    document = ctx.build_ir(schema, documents)
+
+    out_path = Path("debug-ir.json")
+    out_path.write_text(json.dumps(document, indent=2, cls=_DebugEncoder))
     typer.echo(f"Written to {out_path.resolve()}")
 
 
