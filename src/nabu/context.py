@@ -5,6 +5,8 @@ from graphql import DocumentNode, GraphQLSchema
 
 from nabu.config.loader import Config, load_config
 from nabu.diagnostics.reporter import DiagnosticReporter
+from nabu.ir.document import IRDocument
+from nabu.ir.transformer import build_ir
 from nabu.loader.files import list_operation_files, verify_paths
 from nabu.model.symbol_table import SymbolTable
 from nabu.parser.operations import parse_operations
@@ -39,3 +41,8 @@ class CompilerContext:
         self, schema: GraphQLSchema, documents: list[DocumentNode]
     ) -> SymbolTable | None:
         return self.reporter.collect(SymbolTable.build(schema, documents))
+
+    def build_ir(
+        self, schema: GraphQLSchema, documents: list[DocumentNode]
+    ) -> IRDocument | None:
+        return self.reporter.collect(build_ir(schema, documents))

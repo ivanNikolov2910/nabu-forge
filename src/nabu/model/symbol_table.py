@@ -6,8 +6,6 @@ from graphql import (
     GraphQLEnumType,
     GraphQLInputObjectType,
     GraphQLInterfaceType,
-    GraphQLList,
-    GraphQLNonNull,
     GraphQLObjectType,
     GraphQLScalarType,
     GraphQLSchema,
@@ -19,6 +17,12 @@ from nabu.config.types import BUILTIN_SCALARS, is_builtin_scalar, root_type_name
 from nabu.diagnostics.codes import ErrorCode
 from nabu.diagnostics.diagnostic import Diagnostic
 from nabu.diagnostics.result import Result
+from nabu.ir.types import (
+    ListTypeRef,
+    NamedTypeRef,
+    NonNullTypeRef,
+    type_ref_from_graphql,
+)
 from nabu.model.symbols import (
     EnumTypeSymbol,
     FieldSymbol,
@@ -34,16 +38,20 @@ from nabu.model.symbols import (
 
 
 def _unwrap_field(gql_type) -> tuple[str, bool, bool]:
-    non_null = isinstance(gql_type, GraphQLNonNull)
+    type_ref = type_ref_from_graphql(gql_type)
+
+    non_null = isinstance(type_ref, NonNullTypeRef)
     if non_null:
-        gql_type = gql_type.of_type
-    is_list = isinstance(gql_type, GraphQLList)
+        type_ref = type_ref.inner
+
+    is_list = isinstance(type_ref, ListTypeRef)
     if is_list:
-        inner = gql_type.of_type
-        if isinstance(inner, GraphQLNonNull):
-            inner = inner.of_type
-        return inner.name, non_null, is_list
-    return gql_type.name, non_null, is_list
+        type_ref = type_ref.item
+        if isinstance(type_ref, NonNullTypeRef):
+            type_ref = type_ref.inner
+
+    name = type_ref.name if isinstance(type_ref, NamedTypeRef) else str(type_ref)
+    return name, non_null, is_list
 
 
 def _build_fields(gql_fields: dict) -> list[FieldSymbol]:

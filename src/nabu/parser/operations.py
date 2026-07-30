@@ -1,6 +1,13 @@
 from pathlib import Path
 
-from graphql import DocumentNode, GraphQLSchema, GraphQLSyntaxError, parse, validate
+from graphql import (
+    DocumentNode,
+    GraphQLSchema,
+    GraphQLSyntaxError,
+    Source,
+    parse,
+    validate,
+)
 
 from nabu.diagnostics.codes import ErrorCode
 from nabu.diagnostics.diagnostic import Diagnostic
@@ -14,7 +21,7 @@ def parse_operations(
     diagnostics: list[Diagnostic] = []
 
     for path in paths:
-        source = path.read_text(encoding="utf-8")
+        source = Source(path.read_text(encoding="utf-8"), str(path))
 
         try:
             document = parse(source)
