@@ -122,7 +122,7 @@ def test_reserved_field_name():
     """
     ir = _ir(schema_sdl=schema, op_text="")
     result = analyse(ir, _config())
-    assert any(d.code == ErrorCode.RESERVED_NAME for d in result.diagnostics)
+    assert not any(d.code == ErrorCode.RESERVED_NAME for d in result.diagnostics)
 
 
 def test_subscription_produces_e028():

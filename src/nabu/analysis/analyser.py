@@ -1,7 +1,3 @@
-import keyword
-import re
-import typing
-
 from graphql import OperationType
 
 from nabu.analysis.index import IRIndex
@@ -25,6 +21,10 @@ _ROOT_MAP = {
     OperationType.MUTATION: "Mutation",
     OperationType.SUBSCRIPTION: "Subscription",
 }
+
+
+def _to_pascal_case(name: str) -> str:
+    return name[0].upper() + name[1:] if name else name
 
 
 def _location(node) -> SourceLocation | None:
@@ -56,14 +56,6 @@ def _named_refs(type_ref: TypeRef) -> list[str]:
     if isinstance(type_ref, ListTypeRef):
         return _named_refs(type_ref.item)
     return []
-
-
-def _to_class_name(name: str) -> str:
-    return name[:1].upper() + name[1:] if name else name
-
-
-def _to_field_name(name: str) -> str:
-    return re.sub(r"([A-Z])", r"_\1", name).lower().lstrip("_")
 
 
 def _check_ref(
@@ -236,29 +228,17 @@ def _check_naming(document: IRDocument) -> list[Diagnostic]:
         + document.interfaces
         + document.unions
     ):
-        cls = _to_class_name(t.name)
+        cls = _to_pascal_case(t.name)
         if cls in seen:
             diagnostics.append(
                 _produce_error(
                     ErrorCode.NAME_COLLISION,
-                    f"Types '{t.name}' and '{seen[cls]}' both generate Python class name '{cls}'.",
+                    f"Types '{t.name}' and '{seen[cls]}' both produce the identifier '{cls}'.",
                     None,
                 )
             )
         else:
             seen[cls] = t.name
-
-        if hasattr(t, "fields"):
-            for f in t.fields:
-                py = _to_field_name(f.name)
-                if keyword.iskeyword(py):
-                    diagnostics.append(
-                        _produce_error(
-                            ErrorCode.RESERVED_NAME,
-                            f"Field '{f.name}' maps to Python keyword '{py}' in type '{t.name}'.",
-                            _location(f),
-                        )
-                    )
 
     return diagnostics
 
@@ -274,6 +254,7 @@ def _check_unsupported(document: IRDocument) -> list[Diagnostic]:
         for op in document.operations
         if op.operation_type == OperationType.SUBSCRIPTION
     ]
+
 
 def analyse(document: IRDocument, config: Config) -> Result[IRDocument]:
     index = IRIndex(document)
