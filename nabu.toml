@@ -1,3 +1,0 @@
-schema = "schema.graphqls"
-operations = "operations/"
-output = "generated_client"

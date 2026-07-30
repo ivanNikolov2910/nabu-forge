@@ -1,0 +1,11 @@
+from __future__ import annotations
+
+from enum import Enum
+{% for enum in enums %}
+
+
+class {{ enum.class_name }}(str, Enum):
+{% for value in enum.enum_values %}
+    {{ value }} = "{{ value }}"
+{% endfor %}
+{% endfor %}

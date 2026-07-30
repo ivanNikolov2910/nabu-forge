@@ -44,3 +44,26 @@ class CompilerContext:
 
     def analyse(self, document: IRDocument) -> IRDocument:
         return self.reporter.collect(analyse(document, self.config))
+
+    def generate(self, document: IRDocument) -> None:
+        from nabu.backends.python.codegen.enum_gen import generate_enums
+        from nabu.backends.python.codegen.exports_gen import generate_exports
+        from nabu.backends.python.codegen.input_gen import generate_inputs
+        from nabu.backends.python.codegen.model_gen import generate_models
+        from nabu.backends.python.codegen.operation_gen import generate_operations
+        from nabu.backends.python.codegen.scalars_gen import generate_scalars
+        from nabu.backends.python.codegen.writer import write_package
+
+        ops = generate_operations(document, self.config)
+        files: dict[str, str] = {
+            "enums.py": generate_enums(document),
+            "inputs.py": generate_inputs(document, self.config),
+            "models.py": generate_models(document, self.config),
+            "scalars.py": generate_scalars(self.config),
+            "__init__.py": generate_exports(document),
+        }
+        for rel_path, content in ops.items():
+            files[f"operations/{rel_path}"] = content
+
+        output = self.base / self.config.output
+        self.reporter.collect(write_package(output, files))

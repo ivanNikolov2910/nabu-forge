@@ -1,0 +1,20 @@
+from __future__ import annotations
+
+from pydantic import BaseModel
+{% if imports %}
+{{ imports }}
+{% endif %}
+{% for cls in classes %}
+
+
+class {{ cls.class_name }}(BaseModel):
+{% for field in cls.fields %}
+    {{ field.name }}: {{ field.annotation }}{% if field.nullable %} = None{% endif %}
+{% endfor %}
+{% endfor %}
+
+
+class {{ result_class }}(BaseModel):
+{% for field in result_fields %}
+    {{ field.name }}: {{ field.annotation }}{% if field.nullable %} = None{% endif %}
+{% endfor %}

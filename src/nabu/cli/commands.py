@@ -32,6 +32,25 @@ def validate(
     typer.echo("OK")
 
 
+def generate(
+    config_path: Annotated[
+        Path,
+        typer.Option(
+            "--config", "-c", help="Path to nabu.toml, defaults to ./nabu.toml."
+        ),
+    ] = Path("nabu.toml"),
+) -> None:
+    ctx = CompilerContext(config_path)
+    ctx.load()
+    ctx.verify()
+    schema = ctx.parse_schema()
+    documents = ctx.parse_operations(schema)
+    ir = ctx.build_ir(schema, documents)
+    ctx.analyse(ir)
+    ctx.generate(ir)
+    typer.echo("OK")
+
+
 def inspect(
     schema: Annotated[
         Path, typer.Option("--schema", "-s", help="Path to the GraphQL schema file.")

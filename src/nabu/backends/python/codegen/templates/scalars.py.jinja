@@ -1,0 +1,10 @@
+from __future__ import annotations
+{% if imports %}
+{{ imports }}
+{% endif %}
+
+SCALAR_MAP: dict[str, str] = {
+{% for name, annotation in scalars %}
+    "{{ name }}": "{{ annotation }}",
+{% endfor %}
+}

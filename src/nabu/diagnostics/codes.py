@@ -24,3 +24,6 @@ class ErrorCode(StrEnum):
     NAME_COLLISION = "E026"
     RESERVED_NAME = "E027"
     UNSUPPORTED_FEATURE = "E028"
+
+    # E030–E039: code generation errors
+    WRITE_ERROR = "E030"
