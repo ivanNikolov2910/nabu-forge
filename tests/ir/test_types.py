@@ -34,12 +34,10 @@ def test_non_null_list_of_non_null():
 
 
 def test_nested_list():
-    # The flat FieldSymbol form cannot represent this; the recursive TypeRef can.
     ref = type_ref_from_graphql(_field_type("type Query { a: [[Int]] }", "a"))
     assert ref == ListTypeRef(ListTypeRef(NamedTypeRef("Int")))
 
 
 def test_type_ref_is_hashable():
-    # frozen=True — usable as dict keys / in sets during generation
     ref = NonNullTypeRef(NamedTypeRef("Int"))
     assert {ref: 1}[ref] == 1

@@ -50,7 +50,7 @@ def _ir(operation_text: str = ""):
 
 def test_definition_counts():
     doc = _ir()
-    assert len(doc.objects) == 1  # Student (Query/Mutation are roots, excluded)
+    assert len(doc.objects) == 1
     assert len(doc.inputs) == 1
     assert len(doc.enums) == 1
     assert len(doc.interfaces) == 1
@@ -83,8 +83,6 @@ def test_input_field_default_captured():
     doc = _ir()
     filt = next(i for i in doc.inputs if i.name == "StudentFilter")
     limit = next(f for f in filt.fields if f.name == "limit")
-    # limit has schema default 10; captured via field arguments? No — input fields
-    # carry defaults on the field itself, not args. Ensure no crash and field exists.
     assert limit.name == "limit"
 
 
@@ -96,7 +94,6 @@ def test_operation_with_variable_and_selection():
     assert op.variables[0].name == "id"
     field = op.selections[0]
     assert field.name == "student"
-    # $id is a variable reference, not a literal
     assert field.arguments[0].value == IRVariableRef("id")
     assert {s.name for s in field.selections} == {"id", "name"}
 
@@ -141,8 +138,6 @@ def test_anonymous_operation():
 
 
 def test_no_graphql_core_types_leak():
-    # asdict fails if any graphql-core object is reachable; success proves the IR
-    # is fully parser-independent (the core acceptance criterion for Phase 4).
     doc = _ir("query GetStudent($id: ID!) { student(id: $id) { id } }")
     assert dataclasses.asdict(doc)
 
