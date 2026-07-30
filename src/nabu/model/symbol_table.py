@@ -13,10 +13,10 @@ from graphql import (
     OperationDefinitionNode,
 )
 
-from nabu.config.types import BUILTIN_SCALARS, is_builtin_scalar, root_type_names
 from nabu.diagnostics.codes import ErrorCode
 from nabu.diagnostics.diagnostic import Diagnostic
 from nabu.diagnostics.result import Result
+from nabu.graphql.schema_utils import BUILTIN_SCALARS, is_builtin, root_type_names
 from nabu.ir.types import (
     ListTypeRef,
     NamedTypeRef,
@@ -84,7 +84,7 @@ def _schema_to_symbols(
     root_types = root_type_names(schema)
 
     for name, var_type in schema.type_map.items():
-        if is_builtin_scalar(name) or name in root_types:
+        if is_builtin(name) or name in root_types:
             continue
 
         if name in symbols:

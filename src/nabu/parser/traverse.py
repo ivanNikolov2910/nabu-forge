@@ -10,7 +10,7 @@ from graphql.type.definition import (
 )
 from graphql.type.schema import GraphQLSchema
 
-from nabu.config.types import is_builtin_scalar, root_type_names
+from nabu.graphql.schema_utils import is_builtin, root_type_names
 
 
 @dataclass
@@ -35,7 +35,7 @@ def summarise(schema: GraphQLSchema) -> SchemaSummary:
     unions = []
 
     for name, named_type in schema.type_map.items():
-        if is_builtin_scalar(name) or name in root_types:
+        if is_builtin(name) or name in root_types:
             continue
         if isinstance(named_type, GraphQLObjectType):
             object_types.append(name)

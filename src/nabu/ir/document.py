@@ -1,7 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from nabu.ir.definitions import (
     IREnumType,
+    IRField,
     IRInputType,
     IRInterfaceType,
     IRObjectType,
@@ -21,3 +22,5 @@ class IRDocument:
     unions: list[IRUnionType]
     operations: list[IROperation]
     fragments: list[IRFragment]
+    query_fields: list[IRField] = field(default_factory=list)
+    mutation_fields: list[IRField] = field(default_factory=list)

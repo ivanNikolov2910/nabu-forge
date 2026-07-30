@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from graphql import (
     DocumentNode,
     FieldNode,
@@ -23,8 +21,8 @@ from graphql import (
 )
 from graphql.utilities import value_from_ast_untyped
 
-from nabu.config.types import is_builtin_scalar, root_type_names
 from nabu.diagnostics.result import Result
+from nabu.graphql.schema_utils import is_builtin, root_type_names
 from nabu.ir.definitions import (
     IRArgument,
     IREnumType,
@@ -94,7 +92,7 @@ def _type_loc(gql_type) -> SourceLocation | None:
 def _build_definitions(schema: GraphQLSchema, doc: IRDocument) -> None:
     root_types = root_type_names(schema)
     for name, gql_type in schema.type_map.items():
-        if is_builtin_scalar(name) or name in root_types:
+        if is_builtin(name) or name in root_types:
             continue
 
         if isinstance(gql_type, GraphQLObjectType):
@@ -126,7 +124,7 @@ def _build_definitions(schema: GraphQLSchema, doc: IRDocument) -> None:
             doc.scalars.append(
                 IRScalarType(
                     name=name,
-                    builtin=is_builtin_scalar(name),
+                    builtin=is_builtin(name),
                     source_location=_type_loc(gql_type),
                 )
             )
@@ -244,4 +242,8 @@ def build_ir(
     )
     _build_definitions(schema, doc)
     _build_operations(documents, doc)
+    if schema.query_type:
+        doc.query_fields = _ir_fields(schema.query_type.fields)
+    if schema.mutation_type:
+        doc.mutation_fields = _ir_fields(schema.mutation_type.fields)
     return Result(value=doc, diagnostics=[])

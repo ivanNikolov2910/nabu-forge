@@ -15,7 +15,7 @@ class DiagnosticReporter:
         self._diagnostics.append(diagnostic)
         print(str(diagnostic), file=sys.stderr)
 
-    def collect(self, result: Result[T]) -> T | None:
+    def collect(self, result: Result[T]) -> T:
         for diagnostic in result.diagnostics:
             self.add(diagnostic)
         self.exit_if_errors()
