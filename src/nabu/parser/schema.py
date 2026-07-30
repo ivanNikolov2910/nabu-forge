@@ -8,7 +8,6 @@ from nabu.diagnostics.result import Result
 
 
 def parse_schema(path: Path) -> Result[GraphQLSchema]:
-    # Name the Source so schema AST nodes carry the real file path in loc.source.name
     source = Source(path.read_text(encoding="utf-8"), str(path))
     try:
         return Result(value=build_schema(source))

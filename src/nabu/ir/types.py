@@ -24,10 +24,6 @@ TypeRef = NamedTypeRef | ListTypeRef | NonNullTypeRef
 
 
 def type_ref_from_graphql(gql_type: GraphQLType) -> TypeRef:
-    """Recursively convert a graphql-core type into an IR TypeRef.
-
-    Handles arbitrary nesting of NonNull and List wrappers, e.g. [[Int!]]!.
-    """
     if isinstance(gql_type, GraphQLNonNull):
         return NonNullTypeRef(inner=type_ref_from_graphql(gql_type.of_type))
     if isinstance(gql_type, GraphQLList):

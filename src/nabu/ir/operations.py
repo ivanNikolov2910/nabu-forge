@@ -17,18 +17,11 @@ class IRVariable:
 
 @dataclass(frozen=True)
 class IRVariableRef:
-    """A reference to an operation variable used as an argument value,
-    e.g. the `$id` in `student(id: $id)`."""
-
     name: str
 
 
 @dataclass(frozen=True)
 class IRArgumentValue:
-    """An argument passed at an operation call site, e.g. `student(id: "123")`.
-    Distinct from IRArgument, which declares an argument's type in the schema.
-    `value` is a literal Python value, or an IRVariableRef for `$var` references."""
-
     name: str
     value: object
 

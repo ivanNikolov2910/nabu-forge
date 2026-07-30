@@ -38,12 +38,6 @@ from nabu.model.symbols import (
 
 
 def _unwrap_field(gql_type) -> tuple[str, bool, bool]:
-    """Flatten a graphql type into (name, non_null, is_list) for FieldSymbol.
-
-    Delegates wrapper-unwrapping to the IR's recursive type_ref_from_graphql
-    (single source of truth) and collapses the result into the flat form the
-    symbol table uses. Nested-list structure is not representable in the flat
-    form by design — the full recursive shape lives in the IR (Phase 4)."""
     type_ref = type_ref_from_graphql(gql_type)
 
     non_null = isinstance(type_ref, NonNullTypeRef)

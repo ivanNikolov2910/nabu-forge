@@ -58,7 +58,6 @@ from nabu.ir.types import (
 
 
 def _field_arguments(gql_field) -> list[IRArgument]:
-    # Input fields (GraphQLInputField) have no arguments; only output fields do.
     args = getattr(gql_field, "args", None)
     if not args:
         return []

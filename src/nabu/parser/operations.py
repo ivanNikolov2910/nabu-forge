@@ -21,7 +21,6 @@ def parse_operations(
     diagnostics: list[Diagnostic] = []
 
     for path in paths:
-        # Name the Source so AST nodes carry the real file path in loc.source.name
         source = Source(path.read_text(encoding="utf-8"), str(path))
 
         try:
