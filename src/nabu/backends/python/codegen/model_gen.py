@@ -29,12 +29,14 @@ def generate_models(document: IRDocument, config: Config) -> str:
             if isinstance(ref, NamedTypeRef) and ref.name in enum_names:
                 collector.add_relative("enums", to_class_name(ref.name))
             else:
-                collector.add(annotation)
+                annotation = collector.add(annotation)
             fields.append(
                 {
                     "name": to_field_name(f.name),
                     "annotation": annotation,
-                    "nullable": not isinstance(f.type_ref, NonNullTypeRef),
+                    "default": ""
+                    if isinstance(f.type_ref, NonNullTypeRef)
+                    else " = None",
                 }
             )
         models.append(
@@ -43,4 +45,5 @@ def generate_models(document: IRDocument, config: Config) -> str:
                 "fields": fields,
             }
         )
+
     return render("model.py.jinja", {"models": models, "imports": collector.render()})

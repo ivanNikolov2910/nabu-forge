@@ -59,6 +59,28 @@ def _inline_fragments(
     return result
 
 
+def _leaf_field(
+    ir_field,
+    field_name: str,
+    scalars: dict[str, str],
+    collector: ImportCollector,
+    enum_names: set[str],
+) -> dict:
+    annotation = map_type(ir_field.type_ref, scalars)
+    ref = ir_field.type_ref
+    while isinstance(ref, (NonNullTypeRef, ListTypeRef)):
+        ref = ref.inner if isinstance(ref, NonNullTypeRef) else ref.item
+    if isinstance(ref, NamedTypeRef) and ref.name in enum_names:
+        collector.add_relative("..enums", to_class_name(ref.name))
+    else:
+        annotation = collector.add(annotation)
+    return {
+        "name": to_field_name(field_name),
+        "annotation": annotation,
+        "default": " = None" if not isinstance(ir_field.type_ref, NonNullTypeRef) else "",
+    }
+
+
 def _build_selection_classes(
     selections: list[IRSelection],
     parent_type: str,
@@ -73,14 +95,12 @@ def _build_selection_classes(
     for sel in selections:
         if not isinstance(sel, IRFieldSelection):
             continue
-
         field_name = sel.alias or sel.name
         ir_field = index.field_of(parent_type, sel.name)
         if ir_field is None:
             continue
-
         if sel.selections:
-            child_class = prefix + to_class_name(sel.name)
+            child_class = prefix + to_class_name(sel.alias or sel.name)
             child_type = _unwrap_name(ir_field.type_ref) or sel.name
             _build_selection_classes(
                 sel.selections,
@@ -94,29 +114,35 @@ def _build_selection_classes(
             )
             nullable = not isinstance(ir_field.type_ref, NonNullTypeRef)
             annotation = child_class + (" | None" if nullable else "")
-            fields.append(
-                {
-                    "name": to_field_name(field_name),
-                    "annotation": annotation,
-                    "nullable": nullable,
-                }
-            )
+            fields.append({
+                "name": to_field_name(field_name),
+                "annotation": annotation,
+                "default": " = None" if nullable else "",
+            })
         else:
-            annotation = map_type(ir_field.type_ref, scalars)
-            ref = ir_field.type_ref
-            while isinstance(ref, (NonNullTypeRef, ListTypeRef)):
-                ref = ref.inner if isinstance(ref, NonNullTypeRef) else ref.item
-            if isinstance(ref, NamedTypeRef) and ref.name in enum_names:
-                collector.add_relative("enums", to_class_name(ref.name))
-            else:
-                collector.add(annotation)
             fields.append(
-                {
-                    "name": to_field_name(field_name),
-                    "annotation": annotation,
-                    "nullable": not isinstance(ir_field.type_ref, NonNullTypeRef),
-                }
+                _leaf_field(ir_field, field_name, scalars, collector, enum_names)
             )
+
+    for sel in selections:
+        if not isinstance(sel, IRInlineFragment):
+            continue
+        frag_class = prefix + to_class_name(sel.on_type)
+        _build_selection_classes(
+            sel.selections,
+            sel.on_type,
+            frag_class,
+            index,
+            scalars,
+            collector,
+            classes,
+            enum_names,
+        )
+        fields.append({
+            "name": to_field_name(sel.on_type),
+            "annotation": f"{frag_class} | None",
+            "default": " = None",
+        })
 
     classes.append({"class_name": prefix, "fields": fields})
     return fields
@@ -161,6 +187,6 @@ def generate_operation(
 
 def generate_operations(document: IRDocument, config: Config) -> dict[str, str]:
     return {
-        f"{operation.name.lower()}.py": generate_operation(operation, document, config)
+        f"{to_field_name(operation.name)}.py": generate_operation(operation, document, config)
         for operation in document.operations
     }

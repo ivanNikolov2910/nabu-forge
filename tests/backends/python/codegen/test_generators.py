@@ -187,7 +187,7 @@ def test_operation_nested_class(doc, cfg):
 def test_operation_enum_import(doc, cfg):
     op = next(o for o in doc.operations if o.name == "GetBook")
     src = generate_operation(op, doc, cfg)
-    assert "from .enums import Status" in src
+    assert "from ..enums import Status" in src
 
 
 def test_operation_nullable_result(doc, cfg):
@@ -199,7 +199,7 @@ def test_operation_nullable_result(doc, cfg):
 
 def test_operations_dict_keys(doc, cfg):
     ops = generate_operations(doc, cfg)
-    assert "getbook.py" in ops
+    assert "get_book.py" in ops
 
 
 # ---------------------------------------------------------------------------
@@ -212,9 +212,11 @@ def test_scalars_map_present(cfg):
     assert '"DateTime"' in src
 
 
-def test_scalars_import(cfg):
+def test_scalars_annotation_string_present(cfg):
+    # The scalar map stores annotation strings — datetime.datetime appears
+    # as a string value, not a Python import.
     src = generate_scalars(cfg)
-    assert "import datetime" in src
+    assert "datetime.datetime" in src
 
 
 # ---------------------------------------------------------------------------

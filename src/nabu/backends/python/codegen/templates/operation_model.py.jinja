@@ -8,13 +8,13 @@ from pydantic import BaseModel
 
 
 class {{ cls.class_name }}(BaseModel):
-{% for field in cls.fields %}
-    {{ field.name }}: {{ field.annotation }}{% if field.nullable %} = None{% endif %}
-{% endfor %}
+{%- for field in cls.fields %}
+    {{ field.name }}: {{ field.annotation }}{{ field.default }}
+{%- endfor %}
 {% endfor %}
 
 
 class {{ result_class }}(BaseModel):
-{% for field in result_fields %}
-    {{ field.name }}: {{ field.annotation }}{% if field.nullable %} = None{% endif %}
-{% endfor %}
+{%- for field in result_fields %}
+    {{ field.name }}: {{ field.annotation }}{{ field.default }}
+{%- endfor %}

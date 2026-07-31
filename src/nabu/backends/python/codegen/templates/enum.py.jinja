@@ -5,7 +5,7 @@ from enum import Enum
 
 
 class {{ enum.class_name }}(str, Enum):
-{% for value in enum.enum_values %}
+{%- for value in enum.enum_values %}
     {{ value }} = "{{ value }}"
-{% endfor %}
+{%- endfor %}
 {% endfor %}
