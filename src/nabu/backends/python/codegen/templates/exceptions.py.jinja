@@ -1,0 +1,11 @@
+from __future__ import annotations
+
+
+class GraphQLClientError(Exception):
+    """Base class for all generated-client errors."""
+
+
+class GraphQLResponseError(GraphQLClientError):
+    def __init__(self, errors: list[dict]) -> None:
+        self.errors = errors
+        super().__init__(str(errors))

@@ -15,7 +15,8 @@ def _entries(module: str, items) -> list[dict]:
 
 def generate_exports(document: IRDocument) -> str:
     names = (
-        _entries("enums", document.enums)
+        [{"module": "client", "class_name": "Client"}]
+        + _entries("enums", document.enums)
         + _entries("inputs", document.inputs)
         + _entries("models", document.objects)
     )

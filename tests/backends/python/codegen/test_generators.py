@@ -281,24 +281,35 @@ def test_writer_overwrites_changed(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_generated_package_imports(doc, cfg, tmp_path):
+    from nabu.backends.python.codegen.client_gen import generate_client
     from nabu.backends.python.codegen.enum_gen import generate_enums
+    from nabu.backends.python.codegen.exceptions_gen import generate_exceptions
+    from nabu.backends.python.codegen.exports_gen import generate_exports
     from nabu.backends.python.codegen.input_gen import generate_inputs
     from nabu.backends.python.codegen.model_gen import generate_models
-    from nabu.backends.python.codegen.exports_gen import generate_exports
+    from nabu.backends.python.codegen.operation_gen import generate_operations
+    from nabu.backends.python.codegen.transport_gen import generate_transport
 
     files = {
         "enums.py": generate_enums(doc),
         "inputs.py": generate_inputs(doc, cfg),
         "models.py": generate_models(doc, cfg),
+        "transport.py": generate_transport(),
+        "exceptions.py": generate_exceptions(),
+        "client.py": generate_client(doc, [], cfg),
         "__init__.py": generate_exports(doc),
     }
+    for rel, content in generate_operations(doc, cfg).items():
+        files[f"operations/{rel}"] = content
     write_package(tmp_path, files)
 
     pkg_name = "test_generated_pkg"
-    spec = importlib.util.spec_from_file_location(pkg_name, tmp_path / "__init__.py",
-        submodule_search_locations=[str(tmp_path)])
+    spec = importlib.util.spec_from_file_location(
+        pkg_name, tmp_path / "__init__.py", submodule_search_locations=[str(tmp_path)]
+    )
     m = importlib.util.module_from_spec(spec)
     sys.modules[pkg_name] = m
     spec.loader.exec_module(m)
     assert hasattr(m, "Status")
     assert hasattr(m, "Author")
+    assert hasattr(m, "Client")

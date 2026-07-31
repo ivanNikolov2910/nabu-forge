@@ -46,20 +46,27 @@ class CompilerContext:
         return self.reporter.collect(analyse(document, self.config))
 
     def generate(self, document: IRDocument) -> None:
+        from nabu.backends.python.codegen.client_gen import generate_client
         from nabu.backends.python.codegen.enum_gen import generate_enums
+        from nabu.backends.python.codegen.exceptions_gen import generate_exceptions
         from nabu.backends.python.codegen.exports_gen import generate_exports
         from nabu.backends.python.codegen.input_gen import generate_inputs
         from nabu.backends.python.codegen.model_gen import generate_models
         from nabu.backends.python.codegen.operation_gen import generate_operations
         from nabu.backends.python.codegen.scalars_gen import generate_scalars
+        from nabu.backends.python.codegen.transport_gen import generate_transport
         from nabu.backends.python.codegen.writer import write_package
 
+        op_files = list_operation_files(self.config, self.base)
         ops = generate_operations(document, self.config)
         files: dict[str, str] = {
             "enums.py": generate_enums(document),
             "inputs.py": generate_inputs(document, self.config),
             "models.py": generate_models(document, self.config),
             "scalars.py": generate_scalars(self.config),
+            "transport.py": generate_transport(),
+            "exceptions.py": generate_exceptions(),
+            "client.py": generate_client(document, op_files, self.config),
             "__init__.py": generate_exports(document),
         }
         for rel_path, content in ops.items():
