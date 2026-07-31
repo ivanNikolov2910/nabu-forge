@@ -28,34 +28,33 @@ def _unwrap_name(ref: TypeRef) -> str | None:
 
 
 def _inline_fragments(
-    selections: list[IRSelection],
-    fragments: dict[str, IRFragment],
+    selections: list[IRSelection], fragments: dict[str, IRFragment]
 ) -> list[IRSelection]:
     result = []
-    for sel in selections:
-        if isinstance(sel, IRFragmentSpread):
-            frag = fragments.get(sel.name)
-            if frag:
-                result.extend(_inline_fragments(frag.selections, fragments))
-        elif isinstance(sel, IRFieldSelection):
+    for selection in selections:
+        if isinstance(selection, IRFragmentSpread):
+            fragment = fragments.get(selection.name)
+            if fragment:
+                result.extend(_inline_fragments(fragment.selections, fragments))
+        elif isinstance(selection, IRFieldSelection):
             result.append(
                 IRFieldSelection(
-                    name=sel.name,
-                    alias=sel.alias,
-                    arguments=sel.arguments,
-                    selections=_inline_fragments(sel.selections, fragments),
-                    source_location=sel.source_location,
+                    name=selection.name,
+                    alias=selection.alias,
+                    arguments=selection.arguments,
+                    selections=_inline_fragments(selection.selections, fragments),
+                    source_location=selection.source_location,
                 )
             )
-        elif isinstance(sel, IRInlineFragment):
+        elif isinstance(selection, IRInlineFragment):
             result.append(
                 IRInlineFragment(
-                    on_type=sel.on_type,
-                    selections=_inline_fragments(sel.selections, fragments),
+                    on_type=selection.on_type,
+                    selections=_inline_fragments(selection.selections, fragments),
                 )
             )
         else:
-            result.append(sel)
+            result.append(selection)
     return result
 
 
@@ -77,7 +76,9 @@ def _leaf_field(
     return {
         "name": to_field_name(field_name),
         "annotation": annotation,
-        "default": " = None" if not isinstance(ir_field.type_ref, NonNullTypeRef) else "",
+        "default": " = None"
+        if not isinstance(ir_field.type_ref, NonNullTypeRef)
+        else "",
     }
 
 
@@ -92,18 +93,18 @@ def _build_selection_classes(
     enum_names: set[str],
 ) -> list[dict]:
     fields = []
-    for sel in selections:
-        if not isinstance(sel, IRFieldSelection):
+    for selection in selections:
+        if not isinstance(selection, IRFieldSelection):
             continue
-        field_name = sel.alias or sel.name
-        ir_field = index.field_of(parent_type, sel.name)
+        field_name = selection.alias or selection.name
+        ir_field = index.field_of(parent_type, selection.name)
         if ir_field is None:
             continue
-        if sel.selections:
-            child_class = prefix + to_class_name(sel.alias or sel.name)
-            child_type = _unwrap_name(ir_field.type_ref) or sel.name
+        if selection.selections:
+            child_class = prefix + to_class_name(selection.alias or selection.name)
+            child_type = _unwrap_name(ir_field.type_ref) or selection.name
             _build_selection_classes(
-                sel.selections,
+                selection.selections,
                 child_type,
                 child_class,
                 index,
@@ -114,23 +115,25 @@ def _build_selection_classes(
             )
             nullable = not isinstance(ir_field.type_ref, NonNullTypeRef)
             annotation = child_class + (" | None" if nullable else "")
-            fields.append({
-                "name": to_field_name(field_name),
-                "annotation": annotation,
-                "default": " = None" if nullable else "",
-            })
+            fields.append(
+                {
+                    "name": to_field_name(field_name),
+                    "annotation": annotation,
+                    "default": " = None" if nullable else "",
+                }
+            )
         else:
             fields.append(
                 _leaf_field(ir_field, field_name, scalars, collector, enum_names)
             )
 
-    for sel in selections:
-        if not isinstance(sel, IRInlineFragment):
+    for selection in selections:
+        if not isinstance(selection, IRInlineFragment):
             continue
-        frag_class = prefix + to_class_name(sel.on_type)
+        frag_class = prefix + to_class_name(selection.on_type)
         _build_selection_classes(
-            sel.selections,
-            sel.on_type,
+            selection.selections,
+            selection.on_type,
             frag_class,
             index,
             scalars,
@@ -138,32 +141,28 @@ def _build_selection_classes(
             classes,
             enum_names,
         )
-        fields.append({
-            "name": to_field_name(sel.on_type),
-            "annotation": f"{frag_class} | None",
-            "default": " = None",
-        })
+        fields.append(
+            {
+                "name": to_field_name(selection.on_type),
+                "annotation": f"{frag_class} | None",
+                "default": " = None",
+            }
+        )
 
     classes.append({"class_name": prefix, "fields": fields})
     return fields
 
 
 def generate_operation(
-    operation: IROperation,
-    document: IRDocument,
-    config: Config,
+    operation: IROperation, document: IRDocument, config: Config
 ) -> str:
-    from graphql import OperationType
-
     scalars = scalar_table(config.scalars)
     index = IRIndex(document)
     collector = ImportCollector()
-    fragments = {f.name: f for f in document.fragments}
-    enum_names = {e.name for e in document.enums}
+    fragments = {fragment.name: fragment for fragment in document.fragments}
+    enum_names = {enum_.name for enum_ in document.enums}
 
-    root_type = (
-        "Query" if operation.operation_type == OperationType.QUERY else "Mutation"
-    )
+    root_type = "Query" if operation.operation_type == "query" else "Mutation"
     prefix = to_class_name(operation.name)
 
     inlined = _inline_fragments(operation.selections, fragments)
@@ -187,6 +186,8 @@ def generate_operation(
 
 def generate_operations(document: IRDocument, config: Config) -> dict[str, str]:
     return {
-        f"{to_field_name(operation.name)}.py": generate_operation(operation, document, config)
+        f"{to_field_name(operation.name)}.py": generate_operation(
+            operation, document, config
+        )
         for operation in document.operations
     }

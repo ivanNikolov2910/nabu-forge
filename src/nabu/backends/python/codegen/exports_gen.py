@@ -1,14 +1,22 @@
+from operator import itemgetter
+
 from nabu.backends.python.codegen.engine import render
 from nabu.backends.python.mapping.names import to_class_name
 from nabu.ir.document import IRDocument
 
 
+def _entries(module: str, items) -> list[dict]:
+    entries = [
+        {"module": module, "class_name": to_class_name(item.name)} for item in items
+    ]
+    entries.sort(key=itemgetter("class_name"))
+    return entries
+
+
 def generate_exports(document: IRDocument) -> str:
-    # Grouped by module (enums → inputs → models), alphabetical within each group.
-    # Matches the import style ruff/isort would produce.
     names = (
-        sorted([{"module": "enums", "class_name": to_class_name(e.name)} for e in document.enums], key=lambda n: n["class_name"])
-        + sorted([{"module": "inputs", "class_name": to_class_name(i.name)} for i in document.inputs], key=lambda n: n["class_name"])
-        + sorted([{"module": "models", "class_name": to_class_name(o.name)} for o in document.objects], key=lambda n: n["class_name"])
+        _entries("enums", document.enums)
+        + _entries("inputs", document.inputs)
+        + _entries("models", document.objects)
     )
     return render("init.py.jinja", {"names": names})

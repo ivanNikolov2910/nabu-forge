@@ -14,15 +14,15 @@ def _type_names(ref: TypeRef) -> set[str]:
 
 def dependency_order(document: IRDocument) -> list[str]:
     all_types = document.objects + document.inputs + document.interfaces
-    all_names = {t.name for t in all_types}
-    deps: dict[str, set[str]] = {
-        t.name: {
+    all_names = {type_ref.name for type_ref in all_types}
+    dependencies: dict[str, set[str]] = {
+        type_ref.name: {
             name
-            for f in t.fields
-            for name in _type_names(f.type_ref)
+            for field in type_ref.fields
+            for name in _type_names(field.type_ref)
             if name in all_names
         }
-        for t in all_types
+        for type_ref in all_types
     }
 
     order: list[str] = []
@@ -33,8 +33,8 @@ def dependency_order(document: IRDocument) -> list[str]:
         if name in visited or name in visiting:
             return
         visiting.add(name)
-        for dep in deps.get(name, set()):
-            visit(dep)
+        for dependency in dependencies.get(name, set()):
+            visit(dependency)
         visiting.discard(name)
         visited.add(name)
         order.append(name)

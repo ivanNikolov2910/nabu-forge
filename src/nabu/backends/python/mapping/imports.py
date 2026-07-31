@@ -1,6 +1,7 @@
 import re
 
 _BARE_IMPORT_MODULES = {"datetime", "decimal", "uuid", "pathlib", "enum"}
+_PYTHON_BASE_TYPES = ("None", "int", "float", "str", "bool", "list")
 
 
 class ImportCollector:
@@ -14,12 +15,11 @@ class ImportCollector:
         result = annotation
         for token in tokens:
             token = token.strip()
-            if not token or token in ("None", "str", "int", "float", "bool", "list"):
+            if not token or token in _PYTHON_BASE_TYPES:
                 continue
             if "." in token:
                 module, name = token.split(".", 1)
-                module = module.strip()
-                name = name.strip()
+                module, name = module.strip(), name.strip()
                 if module in _BARE_IMPORT_MODULES:
                     self._bare.add(module)
                 else:
@@ -28,8 +28,6 @@ class ImportCollector:
         return result
 
     def add_relative(self, module: str, name: str) -> None:
-        """Record a relative import. module may be a plain name ('enums') or
-        include leading dots for parent packages ('..enums')."""
         if module.startswith("."):
             self._relative.add(f"from {module} import {name}")
         else:
