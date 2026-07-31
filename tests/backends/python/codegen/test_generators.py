@@ -107,6 +107,12 @@ def test_dependency_order_all_types_present(doc):
     assert "Author" in order and "Book" in order
 
 
+def test_dependency_order_is_stable(doc):
+    # Regression: dependency_order iterated a set, so class order varied across
+    # processes (PYTHONHASHSEED), breaking byte-for-byte reproducibility.
+    assert dependency_order(doc) == dependency_order(doc)
+
+
 # ---------------------------------------------------------------------------
 # enum_gen
 # ---------------------------------------------------------------------------
@@ -200,6 +206,33 @@ def test_operation_nullable_result(doc, cfg):
 def test_operations_dict_keys(doc, cfg):
     ops = generate_operations(doc, cfg)
     assert "get_book.py" in ops
+
+
+def test_query_resolves_against_query_root(cfg):
+    # Regression: operation_type was compared to a string and always false,
+    # so every operation resolved against Mutation. A query selecting a
+    # Query-only field must produce a populated result model.
+    schema = build_schema(Source(SCHEMA, "schema.graphqls"))
+    docs = [parse(Source("query GetBook($id: ID!) { book(id: $id) { id } }", "op.graphql"))]
+    d = build_ir(schema, docs).value
+    op = d.operations[0]
+    src = generate_operation(op, d, cfg)
+    # 'book' exists on Query, not Mutation — must be resolved and typed
+    assert "book: GetBookBook | None" in src
+
+
+def test_mutation_resolves_against_mutation_root(cfg):
+    schema = build_schema(Source(SCHEMA, "schema.graphqls"))
+    docs = [parse(Source(
+        'mutation CreateBook($input: CreateBookInput!) { createBook(input: $input) { id title } }',
+        "op.graphql",
+    ))]
+    d = build_ir(schema, docs).value
+    op = d.operations[0]
+    src = generate_operation(op, d, cfg)
+    # 'createBook' exists on Mutation, not Query — must be resolved
+    assert "class CreateBookCreateBook(BaseModel)" in src
+    assert "create_book: CreateBookCreateBook" in src
 
 
 # ---------------------------------------------------------------------------

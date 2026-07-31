@@ -1,8 +1,13 @@
 import dataclasses
 
-from graphql import OperationType, Source, build_schema, parse
+from graphql import Source, build_schema, parse
 
-from nabu.ir.operations import IRFragmentSpread, IRInlineFragment, IRVariableRef
+from nabu.ir.operations import (
+    IRFragmentSpread,
+    IRInlineFragment,
+    IRVariableRef,
+    IROperationType,
+)
 from nabu.ir.transformer import build_ir
 
 SCHEMA = """
@@ -90,7 +95,7 @@ def test_operation_with_variable_and_selection():
     doc = _ir("query GetStudent($id: ID!) { student(id: $id) { id name } }")
     op = doc.operations[0]
     assert op.name == "GetStudent"
-    assert op.operation_type == OperationType.QUERY
+    assert op.operation_type == IROperationType.QUERY
     assert op.variables[0].name == "id"
     field = op.selections[0]
     assert field.name == "student"

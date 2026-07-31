@@ -1,9 +1,9 @@
 from nabu.analysis.index import IRIndex
 from nabu.backends.python.codegen.engine import render
+from nabu.backends.python.codegen.fields import ClassSpec, FieldSpec, build_field
 from nabu.backends.python.mapping.imports import ImportCollector
 from nabu.backends.python.mapping.names import to_class_name, to_field_name
 from nabu.backends.python.mapping.scalars import scalar_table
-from nabu.backends.python.mapping.type_mapper import map_type
 from nabu.config.loader import Config
 from nabu.ir.document import IRDocument
 from nabu.ir.operations import (
@@ -12,25 +12,16 @@ from nabu.ir.operations import (
     IRFragmentSpread,
     IRInlineFragment,
     IROperation,
+    IROperationType,
     IRSelection,
 )
-from nabu.ir.types import ListTypeRef, NamedTypeRef, NonNullTypeRef, TypeRef
-
-
-def _unwrap_name(ref: TypeRef) -> str | None:
-    if isinstance(ref, (NonNullTypeRef,)):
-        return _unwrap_name(ref.inner)
-    if isinstance(ref, ListTypeRef):
-        return _unwrap_name(ref.item)
-    if isinstance(ref, NamedTypeRef):
-        return ref.name
-    return None
+from nabu.ir.types import NonNullTypeRef, unwrap_to_named
 
 
 def _inline_fragments(
     selections: list[IRSelection], fragments: dict[str, IRFragment]
 ) -> list[IRSelection]:
-    result = []
+    result: list[IRSelection] = []
     for selection in selections:
         if isinstance(selection, IRFragmentSpread):
             fragment = fragments.get(selection.name)
@@ -58,98 +49,79 @@ def _inline_fragments(
     return result
 
 
-def _leaf_field(
-    ir_field,
-    field_name: str,
-    scalars: dict[str, str],
-    collector: ImportCollector,
-    enum_names: set[str],
-) -> dict:
-    annotation = map_type(ir_field.type_ref, scalars)
-    ref = ir_field.type_ref
-    while isinstance(ref, (NonNullTypeRef, ListTypeRef)):
-        ref = ref.inner if isinstance(ref, NonNullTypeRef) else ref.item
-    if isinstance(ref, NamedTypeRef) and ref.name in enum_names:
-        collector.add_relative("..enums", to_class_name(ref.name))
-    else:
-        annotation = collector.add(annotation)
-    return {
-        "name": to_field_name(field_name),
-        "annotation": annotation,
-        "default": " = None"
-        if not isinstance(ir_field.type_ref, NonNullTypeRef)
-        else "",
-    }
-
-
-def _build_selection_classes(
+def _selection_fields(
     selections: list[IRSelection],
     parent_type: str,
     prefix: str,
     index: IRIndex,
     scalars: dict[str, str],
-    collector: ImportCollector,
-    classes: list[dict],
     enum_names: set[str],
-) -> list[dict]:
-    fields = []
+    collector: ImportCollector,
+    out_classes: list[ClassSpec],
+) -> list[FieldSpec]:
+    fields: list[FieldSpec] = []
+
     for selection in selections:
         if not isinstance(selection, IRFieldSelection):
             continue
-        field_name = selection.alias or selection.name
         ir_field = index.field_of(parent_type, selection.name)
         if ir_field is None:
             continue
+        field_name = selection.alias or selection.name
+
         if selection.selections:
-            child_class = prefix + to_class_name(selection.alias or selection.name)
-            child_type = _unwrap_name(ir_field.type_ref) or selection.name
-            _build_selection_classes(
+            child_class = prefix + to_class_name(field_name)
+            named = unwrap_to_named(ir_field.type_ref)
+            child_type = named.name if named else selection.name
+            child_fields = _selection_fields(
                 selection.selections,
                 child_type,
                 child_class,
                 index,
                 scalars,
-                collector,
-                classes,
                 enum_names,
+                collector,
+                out_classes,
             )
+            out_classes.append(ClassSpec(class_name=child_class, fields=child_fields))
             nullable = not isinstance(ir_field.type_ref, NonNullTypeRef)
-            annotation = child_class + (" | None" if nullable else "")
             fields.append(
-                {
-                    "name": to_field_name(field_name),
-                    "annotation": annotation,
-                    "default": " = None" if nullable else "",
-                }
+                FieldSpec(
+                    name=to_field_name(field_name),
+                    annotation=child_class + (" | None" if nullable else ""),
+                    default=" = None" if nullable else "",
+                )
             )
         else:
             fields.append(
-                _leaf_field(ir_field, field_name, scalars, collector, enum_names)
+                build_field(
+                    ir_field, scalars, enum_names, collector, enums_module="..enums"
+                )
             )
 
     for selection in selections:
         if not isinstance(selection, IRInlineFragment):
             continue
         frag_class = prefix + to_class_name(selection.on_type)
-        _build_selection_classes(
+        frag_fields = _selection_fields(
             selection.selections,
             selection.on_type,
             frag_class,
             index,
             scalars,
-            collector,
-            classes,
             enum_names,
+            collector,
+            out_classes,
         )
+        out_classes.append(ClassSpec(class_name=frag_class, fields=frag_fields))
         fields.append(
-            {
-                "name": to_field_name(selection.on_type),
-                "annotation": f"{frag_class} | None",
-                "default": " = None",
-            }
+            FieldSpec(
+                name=to_field_name(selection.on_type),
+                annotation=f"{frag_class} | None",
+                default=" = None",
+            )
         )
 
-    classes.append({"class_name": prefix, "fields": fields})
     return fields
 
 
@@ -162,16 +134,16 @@ def generate_operation(
     fragments = {fragment.name: fragment for fragment in document.fragments}
     enum_names = {enum_.name for enum_ in document.enums}
 
-    root_type = "Query" if operation.operation_type == "query" else "Mutation"
+    root_type = (
+        "Query" if operation.operation_type == IROperationType.QUERY else "Mutation"
+    )
     prefix = to_class_name(operation.name)
 
     inlined = _inline_fragments(operation.selections, fragments)
-    classes: list[dict] = []
-    result_fields = _build_selection_classes(
-        inlined, root_type, prefix, index, scalars, collector, classes, enum_names
+    classes: list[ClassSpec] = []
+    result_fields = _selection_fields(
+        inlined, root_type, prefix, index, scalars, enum_names, collector, classes
     )
-    if classes:
-        classes.pop()
 
     return render(
         "operation_model.py.jinja",

@@ -42,6 +42,7 @@ from nabu.ir.operations import (
     IRFragmentSpread,
     IRInlineFragment,
     IROperation,
+    IROperationType,
     IRSelection,
     IRVariable,
     IRVariableRef,
@@ -211,7 +212,7 @@ def _build_operations(documents: list[DocumentNode], doc: IRDocument) -> None:
                 doc.operations.append(
                     IROperation(
                         name=node.name.value if node.name else "<anonymous>",
-                        operation_type=node.operation,
+                        operation_type=IROperationType(node.operation.value),
                         variables=[_variable(v) for v in node.variable_definitions],
                         selections=_selections(node.selection_set),
                         source_location=source_location_from_node(node),

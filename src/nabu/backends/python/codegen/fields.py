@@ -1,8 +1,44 @@
+from dataclasses import dataclass
+
 from nabu.backends.python.mapping.imports import ImportCollector
 from nabu.backends.python.mapping.names import to_class_name, to_field_name
 from nabu.backends.python.mapping.type_mapper import map_type
 from nabu.ir.definitions import IRField
-from nabu.ir.types import ListTypeRef, NamedTypeRef, NonNullTypeRef
+from nabu.ir.types import NonNullTypeRef, unwrap_to_named
+
+
+@dataclass(frozen=True)
+class FieldSpec:
+    name: str
+    annotation: str
+    default: str
+
+
+@dataclass(frozen=True)
+class ClassSpec:
+    class_name: str
+    fields: list[FieldSpec]
+
+
+def build_field(
+    ir_field: IRField,
+    scalars: dict[str, str],
+    enum_names: set[str],
+    collector: ImportCollector,
+    enums_module: str = "enums",
+) -> FieldSpec:
+    annotation = map_type(ir_field.type_ref, scalars)
+    named = unwrap_to_named(ir_field.type_ref)
+    if named is not None and named.name in enum_names:
+        collector.add_relative(enums_module, to_class_name(named.name))
+    else:
+        annotation = collector.add(annotation)
+    nullable = not isinstance(ir_field.type_ref, NonNullTypeRef)
+    return FieldSpec(
+        name=to_field_name(ir_field.name),
+        annotation=annotation,
+        default=" = None" if nullable else "",
+    )
 
 
 def build_fields(
@@ -10,24 +46,8 @@ def build_fields(
     scalars: dict[str, str],
     enum_names: set[str],
     collector: ImportCollector,
-) -> list[dict]:
-    fields = []
-    for field in ir_fields:
-        annotation = map_type(field.type_ref, scalars)
-        ref = field.type_ref
-        while isinstance(ref, (NonNullTypeRef, ListTypeRef)):
-            ref = ref.inner if isinstance(ref, NonNullTypeRef) else ref.item
-        if isinstance(ref, NamedTypeRef) and ref.name in enum_names:
-            collector.add_relative("enums", to_class_name(ref.name))
-        else:
-            annotation = collector.add(annotation)
-        fields.append(
-            {
-                "name": to_field_name(field.name),
-                "annotation": annotation,
-                "default": ""
-                if isinstance(field.type_ref, NonNullTypeRef)
-                else " = None",
-            }
-        )
-    return fields
+    enums_module: str = "enums",
+) -> list[FieldSpec]:
+    return [
+        build_field(f, scalars, enum_names, collector, enums_module) for f in ir_fields
+    ]

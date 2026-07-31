@@ -1,5 +1,3 @@
-from graphql import OperationType
-
 from nabu.analysis.index import IRIndex
 from nabu.config.loader import Config
 from nabu.diagnostics.codes import ErrorCode
@@ -12,14 +10,21 @@ from nabu.ir.operations import (
     IRFieldSelection,
     IRFragmentSpread,
     IRInlineFragment,
+    IROperationType,
     IRSelection,
 )
-from nabu.ir.types import ListTypeRef, NamedTypeRef, NonNullTypeRef, TypeRef
+from nabu.ir.types import (
+    ListTypeRef,
+    NamedTypeRef,
+    NonNullTypeRef,
+    TypeRef,
+    unwrap_to_named,
+)
 
 _ROOT_MAP = {
-    OperationType.QUERY: "Query",
-    OperationType.MUTATION: "Mutation",
-    OperationType.SUBSCRIPTION: "Subscription",
+    IROperationType.QUERY: "Query",
+    IROperationType.MUTATION: "Mutation",
+    IROperationType.SUBSCRIPTION: "Subscription",
 }
 
 
@@ -116,10 +121,8 @@ def _parent_type_after_field(
     f = index.field_of(parent, field_name)
     if f is None:
         return None
-    ref = f.type_ref
-    while isinstance(ref, (NonNullTypeRef, ListTypeRef)):
-        ref = ref.inner if isinstance(ref, NonNullTypeRef) else ref.item
-    return ref.name if isinstance(ref, NamedTypeRef) else None
+    named = unwrap_to_named(f.type_ref)
+    return named.name if named else None
 
 
 def _resolve_field(selection_name: str, parent_type: str, index: IRIndex) -> str | None:
@@ -252,7 +255,7 @@ def _check_unsupported(document: IRDocument) -> list[Diagnostic]:
             hint="Remove the subscription or implement it separately.",
         )
         for op in document.operations
-        if op.operation_type == OperationType.SUBSCRIPTION
+        if op.operation_type == IROperationType.SUBSCRIPTION
     ]
 
 

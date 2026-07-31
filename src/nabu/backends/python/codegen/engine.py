@@ -37,6 +37,6 @@ def render(template_name: str, context: dict) -> str:
     env = Environment(loader=BaseLoader(), keep_trailing_newline=True)
     rendered = env.from_string(source).render(**context)
     filename = template_name.replace(".jinja", "")
-    formated = _ruff_format(rendered, filename)
 
-    return _ruff_fix(formated, filename)
+    fixed = _ruff_fix(rendered, filename)
+    return _ruff_format(fixed, filename)

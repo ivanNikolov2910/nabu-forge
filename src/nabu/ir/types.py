@@ -23,6 +23,12 @@ class NonNullTypeRef:
 TypeRef = NamedTypeRef | ListTypeRef | NonNullTypeRef
 
 
+def unwrap_to_named(ref: TypeRef) -> NamedTypeRef | None:
+    while isinstance(ref, (NonNullTypeRef, ListTypeRef)):
+        ref = ref.inner if isinstance(ref, NonNullTypeRef) else ref.item
+    return ref if isinstance(ref, NamedTypeRef) else None
+
+
 def type_ref_from_graphql(gql_type: GraphQLType) -> TypeRef:
     if isinstance(gql_type, GraphQLNonNull):
         return NonNullTypeRef(inner=type_ref_from_graphql(gql_type.of_type))

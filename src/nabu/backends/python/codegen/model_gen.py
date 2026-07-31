@@ -1,5 +1,5 @@
 from nabu.backends.python.codegen.engine import render
-from nabu.backends.python.codegen.fields import build_fields
+from nabu.backends.python.codegen.fields import ClassSpec, build_fields
 from nabu.backends.python.codegen.ordering import dependency_order
 from nabu.backends.python.mapping.imports import ImportCollector
 from nabu.backends.python.mapping.names import to_class_name
@@ -14,8 +14,7 @@ def generate_models(document: IRDocument, config: Config) -> str:
     collector = ImportCollector()
     enum_names = {e.name for e in document.enums}
     type_by_name: dict[str, IRObjectType | IRInterfaceType] = {
-        type_definition.name: type_definition
-        for type_definition in document.objects + document.interfaces
+        t.name: t for t in document.objects + document.interfaces
     }
 
     models = []
@@ -24,10 +23,10 @@ def generate_models(document: IRDocument, config: Config) -> str:
         if ir_type is None:
             continue
         models.append(
-            {
-                "class_name": to_class_name(ir_type.name),
-                "fields": build_fields(ir_type.fields, scalars, enum_names, collector),
-            }
+            ClassSpec(
+                class_name=to_class_name(ir_type.name),
+                fields=build_fields(ir_type.fields, scalars, enum_names, collector),
+            )
         )
 
     return render("model.py.jinja", {"models": models, "imports": collector.render()})

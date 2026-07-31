@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-
-from graphql import OperationType
+from enum import StrEnum
 
 from nabu.ir.location import SourceLocation
 from nabu.ir.types import TypeRef
+
+
+class IROperationType(StrEnum):
+    QUERY = "query"
+    MUTATION = "mutation"
+    SUBSCRIPTION = "subscription"
 
 
 @dataclass
@@ -52,7 +57,7 @@ IRSelection = IRFieldSelection | IRInlineFragment | IRFragmentSpread
 @dataclass
 class IROperation:
     name: str
-    operation_type: OperationType
+    operation_type: IROperationType
     variables: list[IRVariable]
     selections: list[IRSelection]
     source_location: SourceLocation | None

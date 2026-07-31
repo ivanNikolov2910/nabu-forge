@@ -35,8 +35,7 @@ class ImportCollector:
 
     def render(self) -> str:
         lines: list[str] = []
-        for module in sorted(self._bare):
-            lines.append(f"import {module}")
+        lines.extend(f"import {module}" for module in sorted(self._bare))
         if self._bare and (self._from or self._relative):
             lines.append("")
         for module in sorted(self._from):
@@ -44,6 +43,5 @@ class ImportCollector:
             lines.append(f"from {module} import {names}")
         if self._from and self._relative:
             lines.append("")
-        for stmt in sorted(self._relative):
-            lines.append(stmt)
+        lines.extend(sorted(self._relative))
         return "\n".join(lines)
