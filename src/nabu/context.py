@@ -9,6 +9,7 @@ from nabu.diagnostics.reporter import DiagnosticReporter
 from nabu.ir.document import IRDocument
 from nabu.ir.transformer import build_ir
 from nabu.loader.files import list_operation_files, verify_paths
+from nabu.log import logger
 from nabu.parser.operations import parse_operations
 from nabu.parser.schema import parse_schema
 
@@ -24,25 +25,32 @@ class CompilerContext:
         return self.config_path.parent
 
     def load(self) -> Config:
+        logger.info("Loading config from...")
         self.config = self.reporter.collect(load_config(self.config_path))
         return self.config
 
     def verify(self) -> None:
+        logger.info("Verifying paths...")
         self.reporter.collect(verify_paths(self.config, self.base))
 
     def parse_schema(self) -> GraphQLSchema:
-        return self.reporter.collect(parse_schema(self.base / self.config.schema))
+        schema_path = self.base / self.config.schema
+        logger.info(f"Parsing gql schema {schema_path}...")
+        return self.reporter.collect(parse_schema(schema_path))
 
     def parse_operations(self, schema: GraphQLSchema) -> list[DocumentNode]:
         op_files = list_operation_files(self.config, self.base)
+        logger.info("Parsing gql operations...")
         return self.reporter.collect(parse_operations(op_files, schema))
 
     def build_ir(
         self, schema: GraphQLSchema, documents: list[DocumentNode]
     ) -> IRDocument:
+        logger.info("Building IR layer...")
         return self.reporter.collect(build_ir(schema, documents))
 
     def analyse(self, document: IRDocument) -> IRDocument:
+        logger.info("Analyzing IR layer...")
         return self.reporter.collect(analyse(document, self.config))
 
     def generate(self, document: IRDocument) -> None:
@@ -57,6 +65,7 @@ class CompilerContext:
         from nabu.backends.python.codegen.transport_gen import generate_transport
         from nabu.backends.python.codegen.writer import write_package
 
+        logger.info("Generating code...")
         op_files = list_operation_files(self.config, self.base)
         ops = generate_operations(document, self.config)
         files: dict[str, str] = {
@@ -73,4 +82,5 @@ class CompilerContext:
             files[f"operations/{rel_path}"] = content
 
         output = self.base / self.config.output
+        logger.info(f"Writing code to {output}...")
         self.reporter.collect(write_package(output, files))
