@@ -16,7 +16,6 @@ _FRAGMENT_DEF = re.compile(r"\bfragment\s+(\w+)\b")
 
 
 def _extract_block(text: str, start: int) -> str:
-    """Return the definition starting at `start`, up to its matching brace."""
     brace_open = text.index("{", start)
     depth = 0
     for i in range(brace_open, len(text)):
@@ -29,26 +28,19 @@ def _extract_block(text: str, start: int) -> str:
     return text[start:]
 
 
-def _operation_documents(op_files: list[Path]) -> dict[str, str]:
-    """Map each operation name -> a self-contained document string.
-
-    Extracts only that operation's definition (not the whole file, which may
-    hold several operations) plus any named fragments it spreads, so the server
-    receives exactly one operation."""
+def _operation_documents(operations_files: list[Path]) -> dict[str, str]:
     documents: dict[str, str] = {}
-    for path in op_files:
+    for path in operations_files:
         text = path.read_text(encoding="utf-8")
-        # index every fragment definition in this file by name
         fragments = {
-            m.group(1): _extract_block(text, m.start())
-            for m in _FRAGMENT_DEF.finditer(text)
+            member.group(1): _extract_block(text, member.start())
+            for member in _FRAGMENT_DEF.finditer(text)
         }
+
         for match in _OPERATION_START.finditer(text):
-            op_name = match.group(2)
+            operation_name = match.group(2)
             block = _extract_block(text, match.start())
-            # append any fragments this operation (transitively) spreads
-            needed: list[str] = []
-            seen: set[str] = set()
+            needed, seen = [], set()
             pending = _FRAGMENT_SPREAD.findall(block)
             while pending:
                 frag = pending.pop()
@@ -57,12 +49,11 @@ def _operation_documents(op_files: list[Path]) -> dict[str, str]:
                 seen.add(frag)
                 needed.append(fragments[frag])
                 pending.extend(_FRAGMENT_SPREAD.findall(fragments[frag]))
-            documents[op_name] = "\n\n".join([block, *needed])
+            documents[operation_name] = "\n\n".join([block, *needed])
     return documents
 
 
 def _method_params(variables: list[IRVariable], scalars: dict[str, str]) -> str:
-    """Build the method signature fragment, required params before optional."""
     required, optional = [], []
     for var in variables:
         annotation = map_type(var.type_ref, scalars)
@@ -79,23 +70,26 @@ def _document_const(operation: IROperation) -> str:
     return to_field_name(operation.name).upper() + "_DOCUMENT"
 
 
-def generate_client(document: IRDocument, op_files: list[Path], config: Config) -> str:
+def generate_client(
+    document: IRDocument, operations_files: list[Path], config: Config
+) -> str:
     scalars = scalar_table(config.scalars)
-    documents = _operation_documents(op_files)
-    input_names = {i.name for i in document.inputs}
+    documents = _operation_documents(operations_files)
+    input_names = {input_.name for input_ in document.inputs}
 
     operations = []
     result_imports = []
-    used_inputs: set[str] = set()
+    used_inputs = set()
     for operation in document.operations:
         module = to_field_name(operation.name)
         result_class = f"{to_class_name(operation.name)}Result"
         result_imports.append({"module": module, "result_class": result_class})
 
-        for var in operation.variables:
-            named = unwrap_to_named(var.type_ref)
-            if named and named.name in input_names:
-                used_inputs.add(named.name)
+        used_inputs.update(
+            named.name
+            for var in operation.variables
+            if (named := unwrap_to_named(var.type_ref)) and named.name in input_names
+        )
 
         operations.append(
             {
@@ -105,8 +99,8 @@ def generate_client(document: IRDocument, op_files: list[Path], config: Config) 
                 "result_class": result_class,
                 "params": _method_params(operation.variables, scalars),
                 "variables": [
-                    {"gql_name": v.name, "py_name": to_field_name(v.name)}
-                    for v in operation.variables
+                    {"gql_name": var.name, "py_name": to_field_name(var.name)}
+                    for var in operation.variables
                 ],
             }
         )
