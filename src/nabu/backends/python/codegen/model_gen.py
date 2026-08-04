@@ -11,7 +11,7 @@ from nabu.log import logger
 
 
 def generate_models(document: IRDocument, config: Config) -> str:
-    logger.info(f"Generating {len(document.objects)} entity models...")
+    logger.debug("Generating %d models", len(document.objects))
     scalars = scalar_table(config.scalars)
     collector = ImportCollector()
     enum_names = {e.name for e in document.enums}

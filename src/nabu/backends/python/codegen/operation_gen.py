@@ -129,7 +129,7 @@ def _selection_fields(
 def generate_operation(
     operation: IROperation, document: IRDocument, config: Config
 ) -> str:
-    logger.info(f"Generating operation model for {operation.name}...")
+    logger.debug("Generating operation model for %s", operation.name)
     scalars = scalar_table(config.scalars)
     index = IRIndex(document)
     collector = ImportCollector()

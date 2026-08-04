@@ -5,7 +5,7 @@ from nabu.log import logger
 
 
 def generate_enums(document: IRDocument) -> str:
-    logger.info(f"Generating {len(document.enums)} enums...")
+    logger.debug("Generating %d enums", len(document.enums))
     enums = [
         {"class_name": to_class_name(e.name), "enum_values": e.values}
         for e in document.enums

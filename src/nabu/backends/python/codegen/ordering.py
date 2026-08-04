@@ -1,12 +1,8 @@
 from nabu.ir.document import IRDocument
 from nabu.ir.types import unwrap_to_named
-from nabu.log import logger
 
 
 def dependency_order(document: IRDocument) -> list[str]:
-    logger.info(
-        f"Calculating dependency order for {len(document.objects)} objects, {len(document.inputs)} inputs, and {len(document.interfaces)} interfaces..."
-    )
     all_types = document.objects + document.inputs + document.interfaces
     declaration_order = [t.name for t in all_types]
     all_names = set(declaration_order)

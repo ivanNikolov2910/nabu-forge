@@ -83,7 +83,7 @@ def _check_ref(
 
 
 def _check_type_references(document: IRDocument, index: IRIndex) -> list[Diagnostic]:
-    logger.info("Checking type references in the document...")
+    logger.debug("Checking type references")
     diagnostics: list[Diagnostic] = []
     for obj in document.objects + document.inputs + document.interfaces:
         for f in obj.fields:
@@ -105,7 +105,7 @@ def _check_type_references(document: IRDocument, index: IRIndex) -> list[Diagnos
 
 
 def _check_custom_scalars(document: IRDocument, config: Config) -> list[Diagnostic]:
-    logger.info("Checking custom scalars...")
+    logger.debug("Checking custom scalars")
     return [
         _produce_error(
             ErrorCode.UNMAPPED_SCALAR,
@@ -147,7 +147,6 @@ def _check_selection_set(
     index: IRIndex,
     diagnostics: list[Diagnostic],
 ) -> None:
-    logger.debug(f"Checking selection set for type '{parent_type}'...")
     is_union = isinstance(index.types.get(parent_type), IRUnionType)
 
     for sel in selections:
@@ -200,9 +199,10 @@ def _check_selection_set(
 
 
 def _check_selections(document: IRDocument, index: IRIndex) -> list[Diagnostic]:
-    logger.info("Checking selections...")
+    logger.debug("Checking selections")
     diagnostics: list[Diagnostic] = []
     for op in document.operations:
+        logger.debug("Checking selections for operation %s", op.name)
         _check_selection_set(
             op.selections, _ROOT_MAP[op.operation_type], index, diagnostics
         )
@@ -210,7 +210,7 @@ def _check_selections(document: IRDocument, index: IRIndex) -> list[Diagnostic]:
 
 
 def _check_fragments(document: IRDocument, index: IRIndex) -> list[Diagnostic]:
-    logger.info("Checking fragments...")
+    logger.debug("Checking fragments")
     diagnostics: list[Diagnostic] = []
     for frag in document.fragments:
         if not index.is_defined(frag.on_type):
@@ -227,7 +227,7 @@ def _check_fragments(document: IRDocument, index: IRIndex) -> list[Diagnostic]:
 
 
 def _check_naming(document: IRDocument) -> list[Diagnostic]:
-    logger.info("Checking naming...")
+    logger.debug("Checking naming")
     diagnostics: list[Diagnostic] = []
     seen: dict[str, str] = {}
 
@@ -254,7 +254,7 @@ def _check_naming(document: IRDocument) -> list[Diagnostic]:
 
 
 def _check_unsupported(document: IRDocument) -> list[Diagnostic]:
-    logger.info("Checking unsupported features...")
+    logger.debug("Checking unsupported features")
     return [
         _produce_error(
             ErrorCode.UNSUPPORTED_FEATURE,

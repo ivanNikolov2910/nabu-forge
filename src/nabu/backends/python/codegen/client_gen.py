@@ -74,7 +74,7 @@ def _document_const(operation: IROperation) -> str:
 def generate_client(
     document: IRDocument, operations_files: list[Path], config: Config
 ) -> str:
-    logger.info("Generating client code...")
+    logger.debug("Generating client")
     scalars = scalar_table(config.scalars)
     documents = _operation_documents(operations_files)
     input_names = {input_.name for input_ in document.inputs}

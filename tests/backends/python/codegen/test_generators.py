@@ -313,3 +313,61 @@ def test_generated_package_imports(doc, cfg, tmp_path):
     assert hasattr(m, "Status")
     assert hasattr(m, "Author")
     assert hasattr(m, "Client")
+
+
+def test_university_end_to_end(tmp_path):
+    """Full pipeline on the university sample: generate, import, verify Client shape."""
+    import inspect
+    from nabu.context import CompilerContext
+    from nabu.config.loader import Config
+
+    config_path = Path("samples/university/nabu.toml")
+    if not config_path.exists():
+        pytest.skip("university sample not found")
+
+    # Patch the output dir to tmp_path so we don't touch the sample
+    ctx = CompilerContext(config_path)
+    ctx.load()
+    ctx.config = Config(
+        schema=ctx.config.schema,
+        operations=ctx.config.operations,
+        output=str(tmp_path),
+        scalars=ctx.config.scalars,
+    )
+    schema = ctx.parse_schema()
+    documents = ctx.parse_operations(schema)
+    ir = ctx.build_ir(schema, documents)
+    ctx.analyse(ir)
+    ctx.generate(ir)
+
+    # Import the generated package
+    pkg_name = "university_e2e"
+    spec = importlib.util.spec_from_file_location(
+        pkg_name, tmp_path / "__init__.py", submodule_search_locations=[str(tmp_path)]
+    )
+    m = importlib.util.module_from_spec(spec)
+    sys.modules[pkg_name] = m
+    spec.loader.exec_module(m)
+
+    # Client is importable and instantiates
+    assert hasattr(m, "Client")
+    client = m.Client(url="http://example.com/graphql")
+
+    # Has the right number of methods (one per operation in the sample)
+    methods = [n for n, _ in inspect.getmembers(m.Client, inspect.isfunction)
+               if not n.startswith("_")]
+    assert len(methods) == 14, f"expected 14 methods, got {methods}"
+
+    # Key method signatures are correct
+    get_student_sig = inspect.signature(client.get_student)
+    params = list(get_student_sig.parameters)
+    assert params == ["id"], f"get_student should take (id,), got {params}"
+
+    list_courses_sig = inspect.signature(client.list_courses)
+    list_params = list(list_courses_sig.parameters)
+    assert "filter" in list_params  # optional CourseFilter param
+    assert "limit" in list_params   # optional int
+
+    # Enums and models are exported
+    assert hasattr(m, "EnrollmentStatus")
+    assert hasattr(m, "CourseStatus")

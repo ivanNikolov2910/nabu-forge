@@ -15,7 +15,7 @@ def _entries(module: str, items) -> list[dict]:
 
 
 def generate_exports(document: IRDocument) -> str:
-    logger.info("Generating __init__.py...")
+    logger.debug("Generating __init__.py")
     names = (
         [{"module": "client", "class_name": "Client"}]
         + _entries("enums", document.enums)

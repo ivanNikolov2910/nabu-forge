@@ -6,7 +6,7 @@ from nabu.log import logger
 
 
 def generate_scalars(config: Config) -> str:
-    logger.info(f"Generating {len(config.scalars)} scalars...")
+    logger.debug("Generating scalar map")
 
     scalars = scalar_table(config.scalars)
     collector = ImportCollector()

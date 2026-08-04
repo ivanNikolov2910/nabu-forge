@@ -3,11 +3,9 @@ from pathlib import Path
 from nabu.diagnostics.codes import ErrorCode
 from nabu.diagnostics.diagnostic import Diagnostic
 from nabu.diagnostics.result import Result
-from nabu.log import logger
 
 
 def write_package(output_dir: Path, files: dict[str, str]) -> Result[None]:
-    logger.info(f"Writing generated package to {output_dir}...")
     diagnostics: list[Diagnostic] = []
     try:
         expected = {Path(rel) for rel in files}

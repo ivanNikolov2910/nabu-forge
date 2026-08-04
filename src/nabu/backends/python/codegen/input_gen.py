@@ -9,7 +9,7 @@ from nabu.log import logger
 
 
 def generate_inputs(document: IRDocument, config: Config) -> str:
-    logger.info(f"Generating {len(document.inputs)} inputs...")
+    logger.debug("Generating %d inputs", len(document.inputs))
     scalars = scalar_table(config.scalars)
     collector = ImportCollector()
     enum_names = {enum_.name for enum_ in document.enums}
