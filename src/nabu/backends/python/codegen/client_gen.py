@@ -9,6 +9,7 @@ from nabu.config.loader import Config
 from nabu.ir.document import IRDocument
 from nabu.ir.operations import IROperation, IRVariable
 from nabu.ir.types import NonNullTypeRef, unwrap_to_named
+from nabu.log import logger
 
 _OPERATION_START = re.compile(r"\b(query|mutation|subscription)\s+(\w+)")
 _FRAGMENT_SPREAD = re.compile(r"\.\.\.\s*(\w+)")
@@ -73,6 +74,7 @@ def _document_const(operation: IROperation) -> str:
 def generate_client(
     document: IRDocument, operations_files: list[Path], config: Config
 ) -> str:
+    logger.info("Generating client code...")
     scalars = scalar_table(config.scalars)
     documents = _operation_documents(operations_files)
     input_names = {input_.name for input_ in document.inputs}

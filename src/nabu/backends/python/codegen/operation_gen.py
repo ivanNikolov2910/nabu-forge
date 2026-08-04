@@ -16,6 +16,7 @@ from nabu.ir.operations import (
     IRSelection,
 )
 from nabu.ir.types import NonNullTypeRef, unwrap_to_named
+from nabu.log import logger
 
 
 def _inline_fragments(
@@ -128,6 +129,7 @@ def _selection_fields(
 def generate_operation(
     operation: IROperation, document: IRDocument, config: Config
 ) -> str:
+    logger.info(f"Generating operation model for {operation.name}...")
     scalars = scalar_table(config.scalars)
     index = IRIndex(document)
     collector = ImportCollector()

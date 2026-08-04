@@ -5,12 +5,14 @@ from nabu.backends.python.mapping.names import to_class_name
 from nabu.backends.python.mapping.scalars import scalar_table
 from nabu.config.loader import Config
 from nabu.ir.document import IRDocument
+from nabu.log import logger
 
 
 def generate_inputs(document: IRDocument, config: Config) -> str:
+    logger.info(f"Generating {len(document.inputs)} inputs...")
     scalars = scalar_table(config.scalars)
     collector = ImportCollector()
-    enum_names = {e.name for e in document.enums}
+    enum_names = {enum_.name for enum_ in document.enums}
     models = [
         ClassSpec(
             class_name=to_class_name(input_.name),

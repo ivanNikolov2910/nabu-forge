@@ -2,9 +2,12 @@ from nabu.backends.python.codegen.engine import render
 from nabu.backends.python.mapping.imports import ImportCollector
 from nabu.backends.python.mapping.scalars import scalar_table
 from nabu.config.loader import Config
+from nabu.log import logger
 
 
 def generate_scalars(config: Config) -> str:
+    logger.info(f"Generating {len(config.scalars)} scalars...")
+
     scalars = scalar_table(config.scalars)
     collector = ImportCollector()
     entries = []

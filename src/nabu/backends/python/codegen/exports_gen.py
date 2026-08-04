@@ -3,6 +3,7 @@ from operator import itemgetter
 from nabu.backends.python.codegen.engine import render
 from nabu.backends.python.mapping.names import to_class_name
 from nabu.ir.document import IRDocument
+from nabu.log import logger
 
 
 def _entries(module: str, items) -> list[dict]:
@@ -14,6 +15,7 @@ def _entries(module: str, items) -> list[dict]:
 
 
 def generate_exports(document: IRDocument) -> str:
+    logger.info("Generating __init__.py...")
     names = (
         [{"module": "client", "class_name": "Client"}]
         + _entries("enums", document.enums)

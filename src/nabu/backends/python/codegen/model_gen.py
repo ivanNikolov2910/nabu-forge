@@ -7,9 +7,11 @@ from nabu.backends.python.mapping.scalars import scalar_table
 from nabu.config.loader import Config
 from nabu.ir.definitions import IRInterfaceType, IRObjectType
 from nabu.ir.document import IRDocument
+from nabu.log import logger
 
 
 def generate_models(document: IRDocument, config: Config) -> str:
+    logger.info(f"Generating {len(document.objects)} entity models...")
     scalars = scalar_table(config.scalars)
     collector = ImportCollector()
     enum_names = {e.name for e in document.enums}
