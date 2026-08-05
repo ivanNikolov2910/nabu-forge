@@ -14,10 +14,7 @@ def test_class_name_empty():
 
 
 def test_class_name_reserved_word():
-    # 'pass' uppercased to 'Pass' — no longer a keyword, no suffix needed
     assert to_class_name("pass") == "Pass"
-    # A hypothetical name that stays a keyword after uppercasing would get _
-    # (no such GraphQL names exist in practice, but the guard is there)
 
 
 def test_class_name_single_char():
@@ -41,7 +38,5 @@ def test_field_name_reserved_word():
 
 
 def test_field_name_all_caps_acronym():
-    # e.g. "URL" → "u_r_l" is not ideal but consistent with the regex approach
-    # and flagged if it becomes a keyword; no special-casing for now
     result = to_field_name("URL")
     assert isinstance(result, str) and len(result) > 0

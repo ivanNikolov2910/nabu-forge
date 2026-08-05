@@ -1,6 +1,6 @@
 import pytest
 
-from nabu.backends.python.mapping.scalars import BUILTIN_SCALAR_ANNOTATIONS, scalar_table
+from nabu.backends.python.mapping.scalars import scalar_table
 from nabu.backends.python.mapping.type_mapper import map_type
 from nabu.ir.types import ListTypeRef, NamedTypeRef, NonNullTypeRef
 
@@ -19,23 +19,40 @@ def test_non_null_named(scalars):
 
 
 def test_nullable_list_of_nullable(scalars):
-    assert map_type(ListTypeRef(NamedTypeRef("String")), scalars) == "list[str | None] | None"
+    assert (
+        map_type(ListTypeRef(NamedTypeRef("String")), scalars)
+        == "list[str | None] | None"
+    )
 
 
 def test_nullable_list_of_non_null(scalars):
-    assert map_type(ListTypeRef(NonNullTypeRef(NamedTypeRef("String"))), scalars) == "list[str] | None"
+    assert (
+        map_type(ListTypeRef(NonNullTypeRef(NamedTypeRef("String"))), scalars)
+        == "list[str] | None"
+    )
 
 
 def test_non_null_list_of_nullable(scalars):
-    assert map_type(NonNullTypeRef(ListTypeRef(NamedTypeRef("String"))), scalars) == "list[str | None]"
+    assert (
+        map_type(NonNullTypeRef(ListTypeRef(NamedTypeRef("String"))), scalars)
+        == "list[str | None]"
+    )
 
 
 def test_non_null_list_of_non_null(scalars):
-    assert map_type(NonNullTypeRef(ListTypeRef(NonNullTypeRef(NamedTypeRef("String")))), scalars) == "list[str]"
+    assert (
+        map_type(
+            NonNullTypeRef(ListTypeRef(NonNullTypeRef(NamedTypeRef("String")))), scalars
+        )
+        == "list[str]"
+    )
 
 
 def test_custom_scalar_non_null(scalars):
-    assert map_type(NonNullTypeRef(NamedTypeRef("DateTime")), scalars) == "datetime.datetime"
+    assert (
+        map_type(NonNullTypeRef(NamedTypeRef("DateTime")), scalars)
+        == "datetime.datetime"
+    )
 
 
 def test_custom_scalar_nullable(scalars):
@@ -56,7 +73,6 @@ def test_all_builtin_scalars():
 
 
 def test_object_type_returned_as_name(scalars):
-    # Object/enum names pass through as-is; generator applies to_class_name
     assert map_type(NonNullTypeRef(NamedTypeRef("Student")), scalars) == "Student"
     assert map_type(NamedTypeRef("Student"), scalars) == "Student | None"
 

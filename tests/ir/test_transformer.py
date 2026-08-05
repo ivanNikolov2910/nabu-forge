@@ -5,8 +5,8 @@ from graphql import Source, build_schema, parse
 from nabu.ir.operations import (
     IRFragmentSpread,
     IRInlineFragment,
-    IRVariableRef,
     IROperationType,
+    IRVariableRef,
 )
 from nabu.ir.transformer import build_ir
 

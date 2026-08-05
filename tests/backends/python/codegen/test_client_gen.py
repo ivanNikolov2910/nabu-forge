@@ -37,7 +37,9 @@ type Mutation {
 
 GET_BOOK = "query GetBook($id: ID!) { book(id: $id) { id title } }"
 LIST_BOOKS = "query ListBooks($status: Status, $limit: Int) { books(status: $status, limit: $limit) { id } }"
-CREATE_BOOK = "mutation CreateBook($input: CreateBookInput!) { createBook(input: $input) { id } }"
+CREATE_BOOK = (
+    "mutation CreateBook($input: CreateBookInput!) { createBook(input: $input) { id } }"
+)
 
 
 def _generate(op_texts: list[str], tmp_path: Path) -> str:
@@ -54,10 +56,6 @@ def _generate(op_texts: list[str], tmp_path: Path) -> str:
     return generate_client(document, op_files, config)
 
 
-# ---------------------------------------------------------------------------
-# static generators
-# ---------------------------------------------------------------------------
-
 def test_transport_contains_class():
     assert "class Transport" in generate_transport()
     assert "httpx" in generate_transport()
@@ -68,10 +66,6 @@ def test_exceptions_contains_error():
     assert "class GraphQLResponseError" in src
     assert "class GraphQLClientError" in src
 
-
-# ---------------------------------------------------------------------------
-# client generation
-# ---------------------------------------------------------------------------
 
 def test_client_class_and_method(tmp_path):
     src = _generate([GET_BOOK], tmp_path)
@@ -87,8 +81,6 @@ def test_document_constant(tmp_path):
 
 def test_required_before_optional_params(tmp_path):
     src = _generate([LIST_BOOKS], tmp_path)
-    # status and limit are both nullable -> both optional with = None
-    # (ruff may wrap the signature across lines, so check the fragment)
     assert "status: Status | None = None" in src
     assert "limit: int | None = None" in src
 
@@ -126,17 +118,12 @@ def test_single_operation_document(tmp_path):
     assert "ListBooks" not in get_book_doc
 
 
-# ---------------------------------------------------------------------------
-# serialisation helper (executed from generated source)
-# ---------------------------------------------------------------------------
-
 def test_serialize_enum(tmp_path):
     src = _generate([GET_BOOK], tmp_path)
     ns: dict = {"Enum": Enum, "BaseModel": BaseModel}
-    # extract and exec just the _serialize function
     start = src.index("def _serialize")
     end = src.index("class Client")
-    exec(src[start:end], ns)  # noqa: S102 - trusted generated code in test
+    exec(src[start:end], ns)
     serialize = ns["_serialize"]
 
     class Color(str, Enum):

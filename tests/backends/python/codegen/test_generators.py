@@ -1,12 +1,3 @@
-"""Tests for Phase 7 code generators.
-
-Uses a small self-contained schema/IR so tests run without the filesystem
-or the university sample. Generator output is verified by:
-  1. containing expected class/field names
-  2. importing cleanly (compile test)
-  3. producing identical output on two calls (determinism)
-"""
-
 import importlib
 import sys
 from pathlib import Path
@@ -18,7 +9,10 @@ from nabu.backends.python.codegen.enum_gen import generate_enums
 from nabu.backends.python.codegen.exports_gen import generate_exports
 from nabu.backends.python.codegen.input_gen import generate_inputs
 from nabu.backends.python.codegen.model_gen import generate_models
-from nabu.backends.python.codegen.operation_gen import generate_operation, generate_operations
+from nabu.backends.python.codegen.operation_gen import (
+    generate_operation,
+    generate_operations,
+)
 from nabu.backends.python.codegen.ordering import dependency_order
 from nabu.backends.python.codegen.scalars_gen import generate_scalars
 from nabu.backends.python.codegen.writer import write_package
@@ -93,10 +87,6 @@ def cfg():
     )
 
 
-# ---------------------------------------------------------------------------
-# ordering
-# ---------------------------------------------------------------------------
-
 def test_dependency_order_books_after_author(doc):
     order = dependency_order(doc)
     assert order.index("Author") < order.index("Book")
@@ -108,14 +98,8 @@ def test_dependency_order_all_types_present(doc):
 
 
 def test_dependency_order_is_stable(doc):
-    # Regression: dependency_order iterated a set, so class order varied across
-    # processes (PYTHONHASHSEED), breaking byte-for-byte reproducibility.
     assert dependency_order(doc) == dependency_order(doc)
 
-
-# ---------------------------------------------------------------------------
-# enum_gen
-# ---------------------------------------------------------------------------
 
 def test_enums_contains_class(doc):
     src = generate_enums(doc)
@@ -132,10 +116,6 @@ def test_enums_deterministic(doc):
     assert generate_enums(doc) == generate_enums(doc)
 
 
-# ---------------------------------------------------------------------------
-# input_gen
-# ---------------------------------------------------------------------------
-
 def test_inputs_contains_class(doc, cfg):
     src = generate_inputs(doc, cfg)
     assert "class CreateBookInput(BaseModel)" in src
@@ -149,10 +129,6 @@ def test_inputs_required_field(doc, cfg):
 def test_inputs_deterministic(doc, cfg):
     assert generate_inputs(doc, cfg) == generate_inputs(doc, cfg)
 
-
-# ---------------------------------------------------------------------------
-# model_gen
-# ---------------------------------------------------------------------------
 
 def test_models_contains_classes(doc, cfg):
     src = generate_models(doc, cfg)
@@ -173,10 +149,6 @@ def test_models_author_before_book(doc, cfg):
 def test_models_deterministic(doc, cfg):
     assert generate_models(doc, cfg) == generate_models(doc, cfg)
 
-
-# ---------------------------------------------------------------------------
-# operation_gen
-# ---------------------------------------------------------------------------
 
 def test_operation_result_class(doc, cfg):
     op = next(o for o in doc.operations if o.name == "GetBook")
@@ -209,24 +181,26 @@ def test_operations_dict_keys(doc, cfg):
 
 
 def test_query_resolves_against_query_root(cfg):
-    # Regression: operation_type was compared to a string and always false,
-    # so every operation resolved against Mutation. A query selecting a
-    # Query-only field must produce a populated result model.
     schema = build_schema(Source(SCHEMA, "schema.graphqls"))
-    docs = [parse(Source("query GetBook($id: ID!) { book(id: $id) { id } }", "op.graphql"))]
+    docs = [
+        parse(Source("query GetBook($id: ID!) { book(id: $id) { id } }", "op.graphql"))
+    ]
     d = build_ir(schema, docs).value
     op = d.operations[0]
     src = generate_operation(op, d, cfg)
-    # 'book' exists on Query, not Mutation — must be resolved and typed
     assert "book: GetBookBook | None" in src
 
 
 def test_mutation_resolves_against_mutation_root(cfg):
     schema = build_schema(Source(SCHEMA, "schema.graphqls"))
-    docs = [parse(Source(
-        'mutation CreateBook($input: CreateBookInput!) { createBook(input: $input) { id title } }',
-        "op.graphql",
-    ))]
+    docs = [
+        parse(
+            Source(
+                "mutation CreateBook($input: CreateBookInput!) { createBook(input: $input) { id title } }",
+                "op.graphql",
+            )
+        )
+    ]
     d = build_ir(schema, docs).value
     op = d.operations[0]
     src = generate_operation(op, d, cfg)
@@ -235,10 +209,6 @@ def test_mutation_resolves_against_mutation_root(cfg):
     assert "create_book: CreateBookCreateBook" in src
 
 
-# ---------------------------------------------------------------------------
-# scalars_gen
-# ---------------------------------------------------------------------------
-
 def test_scalars_map_present(cfg):
     src = generate_scalars(cfg)
     assert "SCALAR_MAP" in src
@@ -246,15 +216,9 @@ def test_scalars_map_present(cfg):
 
 
 def test_scalars_annotation_string_present(cfg):
-    # The scalar map stores annotation strings — datetime.datetime appears
-    # as a string value, not a Python import.
     src = generate_scalars(cfg)
     assert "datetime.datetime" in src
 
-
-# ---------------------------------------------------------------------------
-# writer
-# ---------------------------------------------------------------------------
 
 def test_writer_creates_files(tmp_path):
     result = write_package(tmp_path, {"enums.py": "x = 1\n", "ops/a.py": "y = 2\n"})
@@ -276,15 +240,10 @@ def test_writer_overwrites_changed(tmp_path):
     assert (tmp_path / "enums.py").read_text() == "x = 2\n"
 
 
-# ---------------------------------------------------------------------------
-# compile + determinism (end-to-end)
-# ---------------------------------------------------------------------------
-
 def test_generated_package_imports(doc, cfg, tmp_path):
     from nabu.backends.python.codegen.client_gen import generate_client
     from nabu.backends.python.codegen.enum_gen import generate_enums
     from nabu.backends.python.codegen.exceptions_gen import generate_exceptions
-    from nabu.backends.python.codegen.exports_gen import generate_exports
     from nabu.backends.python.codegen.input_gen import generate_inputs
     from nabu.backends.python.codegen.model_gen import generate_models
     from nabu.backends.python.codegen.operation_gen import generate_operations
@@ -316,16 +275,15 @@ def test_generated_package_imports(doc, cfg, tmp_path):
 
 
 def test_university_end_to_end(tmp_path):
-    """Full pipeline on the university sample: generate, import, verify Client shape."""
     import inspect
-    from nabu.context import CompilerContext
+
     from nabu.config.loader import Config
+    from nabu.context import CompilerContext
 
     config_path = Path("samples/university/nabu.toml")
     if not config_path.exists():
         pytest.skip("university sample not found")
 
-    # Patch the output dir to tmp_path so we don't touch the sample
     ctx = CompilerContext(config_path)
     ctx.load()
     ctx.config = Config(
@@ -340,7 +298,6 @@ def test_university_end_to_end(tmp_path):
     ctx.analyse(ir)
     ctx.generate(ir)
 
-    # Import the generated package
     pkg_name = "university_e2e"
     spec = importlib.util.spec_from_file_location(
         pkg_name, tmp_path / "__init__.py", submodule_search_locations=[str(tmp_path)]
@@ -349,25 +306,24 @@ def test_university_end_to_end(tmp_path):
     sys.modules[pkg_name] = m
     spec.loader.exec_module(m)
 
-    # Client is importable and instantiates
     assert hasattr(m, "Client")
     client = m.Client(url="http://example.com/graphql")
 
-    # Has the right number of methods (one per operation in the sample)
-    methods = [n for n, _ in inspect.getmembers(m.Client, inspect.isfunction)
-               if not n.startswith("_")]
+    methods = [
+        n
+        for n, _ in inspect.getmembers(m.Client, inspect.isfunction)
+        if not n.startswith("_")
+    ]
     assert len(methods) == 14, f"expected 14 methods, got {methods}"
 
-    # Key method signatures are correct
     get_student_sig = inspect.signature(client.get_student)
     params = list(get_student_sig.parameters)
     assert params == ["id"], f"get_student should take (id,), got {params}"
 
     list_courses_sig = inspect.signature(client.list_courses)
     list_params = list(list_courses_sig.parameters)
-    assert "filter" in list_params  # optional CourseFilter param
-    assert "limit" in list_params   # optional int
+    assert "filter" in list_params
+    assert "limit" in list_params
 
-    # Enums and models are exported
     assert hasattr(m, "EnrollmentStatus")
     assert hasattr(m, "CourseStatus")
