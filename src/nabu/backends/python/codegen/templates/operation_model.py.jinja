@@ -4,13 +4,25 @@ from pydantic import BaseModel
 {% if imports %}
 {{ imports }}
 {% endif %}
-{% for cls in classes %}
+{% for entry in classes %}
+{% if entry.kind == "class" %}
 
 
-class {{ cls.class_name }}(BaseModel):
-{%- for field in cls.fields %}
+class {{ entry.class_name }}(BaseModel):
+{%- if entry.has_typename %}
+    model_config = ConfigDict(populate_by_name=True)
+{%- endif %}
+{%- for field in entry.fields %}
     {{ field.name }}: {{ field.annotation }}{{ field.default }}
 {%- endfor %}
+{% elif entry.kind == "union" %}
+
+
+{{ entry.alias_name }} = Annotated[
+    {{ entry.members | join("\n    | ") }},
+    Field(discriminator="typename"),
+]
+{% endif %}
 {% endfor %}
 
 

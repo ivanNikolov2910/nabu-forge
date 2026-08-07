@@ -327,3 +327,138 @@ def test_university_end_to_end(tmp_path):
 
     assert hasattr(m, "EnrollmentStatus")
     assert hasattr(m, "CourseStatus")
+
+
+# ---------------------------------------------------------------------------
+# Phase 9: discriminated unions
+# ---------------------------------------------------------------------------
+
+POLY_SCHEMA = """
+enum Kind { A B }
+
+type Cat {
+    id: ID!
+    name: String!
+    kind: Kind!
+}
+
+type Dog {
+    id: ID!
+    name: String!
+    breed: String
+}
+
+union Animal = Cat | Dog
+
+type Query {
+    animal(id: ID!): Animal
+}
+"""
+
+POLY_OPERATION = """
+query GetAnimal($id: ID!) {
+    animal(id: $id) {
+        ... on Cat { id name kind }
+        ... on Dog { id name breed }
+    }
+}
+"""
+
+
+def _poly_ir(tmp_path):
+    schema = build_schema(Source(POLY_SCHEMA, "schema.graphqls"))
+    op_path = tmp_path / "get_animal.graphql"
+    op_path.write_text(POLY_OPERATION)
+    docs = [parse(Source(POLY_OPERATION, str(op_path)))]
+    return build_ir(schema, docs).value, tmp_path
+
+
+def test_union_field_generates_discriminated_alias(tmp_path):
+    doc, _ = _poly_ir(tmp_path)
+    op = doc.operations[0]
+    src = generate_operation(op, doc, Config(schema="s", operations="o", output="out", scalars={}))
+    assert "Annotated[" in src
+    assert 'Field(discriminator="typename")' in src
+    assert "GetAnimalAnimalCat" in src
+    assert "GetAnimalAnimalDog" in src
+    assert "GetAnimalAnimal = Annotated[" in src
+
+
+def test_union_member_class_has_typename_field(tmp_path):
+    doc, _ = _poly_ir(tmp_path)
+    op = doc.operations[0]
+    src = generate_operation(op, doc, Config(schema="s", operations="o", output="out", scalars={}))
+    assert 'Literal["Cat"]' in src
+    assert 'Literal["Dog"]' in src
+    assert 'Field(alias="__typename")' in src
+
+
+def test_union_member_class_has_model_config(tmp_path):
+    doc, _ = _poly_ir(tmp_path)
+    op = doc.operations[0]
+    src = generate_operation(op, doc, Config(schema="s", operations="o", output="out", scalars={}))
+    assert "model_config = ConfigDict(populate_by_name=True)" in src
+
+
+def test_non_union_field_unchanged(doc, cfg):
+    op = next(o for o in doc.operations if o.name == "GetBook")
+    src = generate_operation(op, doc, cfg)
+    # non-polymorphic result — no discriminated union
+    assert "Annotated[" not in src
+    assert "discriminator" not in src
+
+
+def test_discriminated_union_deserialises(tmp_path):
+    """The generated discriminated union model must deserialise correctly at runtime."""
+    doc, _ = _poly_ir(tmp_path)
+    op = doc.operations[0]
+    src = generate_operation(op, doc, Config(schema="s", operations="o", output="out", scalars={}))
+
+    # Write to tmp_path and import it
+    op_dir = tmp_path / "operations"
+    op_dir.mkdir()
+    (op_dir / "__init__.py").write_text("")
+    (tmp_path / "enums.py").write_text(
+        "from __future__ import annotations\nfrom enum import Enum\n\nclass Kind(str, Enum):\n    A = 'A'\n    B = 'B'\n"
+    )
+    (op_dir / "get_animal.py").write_text(src)
+
+    pkg = "discriminated_test_pkg"
+    # Register the root package so relative imports resolve
+    import types as _types
+    root_pkg = _types.ModuleType(pkg)
+    root_pkg.__path__ = [str(tmp_path)]
+    root_pkg.__package__ = pkg
+    sys.modules[pkg] = root_pkg
+    ops_pkg = _types.ModuleType(f"{pkg}.operations")
+    ops_pkg.__path__ = [str(op_dir)]
+    ops_pkg.__package__ = f"{pkg}.operations"
+    sys.modules[f"{pkg}.operations"] = ops_pkg
+
+    enums_spec = importlib.util.spec_from_file_location(f"{pkg}.enums", tmp_path / "enums.py")
+    enums_m = importlib.util.module_from_spec(enums_spec)
+    sys.modules[f"{pkg}.enums"] = enums_m
+    enums_spec.loader.exec_module(enums_m)
+
+    spec = importlib.util.spec_from_file_location(
+        f"{pkg}.operations.get_animal",
+        op_dir / "get_animal.py",
+    )
+    m = importlib.util.module_from_spec(spec)
+    sys.modules[f"{pkg}.operations.get_animal"] = m
+    spec.loader.exec_module(m)
+
+    from pydantic import TypeAdapter
+    Animal = m.GetAnimalAnimal
+    adapter = TypeAdapter(Animal)
+
+    cat_data = {"__typename": "Cat", "id": "1", "name": "Whiskers", "kind": "A"}
+    result = adapter.validate_python(cat_data)
+    assert type(result).__name__ == "GetAnimalAnimalCat"
+    assert result.id == "1"
+    assert result.typename == "Cat"
+
+    dog_data = {"__typename": "Dog", "id": "2", "name": "Rex", "breed": "Labrador"}
+    result2 = adapter.validate_python(dog_data)
+    assert type(result2).__name__ == "GetAnimalAnimalDog"
+    assert result2.typename == "Dog"

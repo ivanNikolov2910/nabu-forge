@@ -31,4 +31,19 @@ def generate_models(document: IRDocument, config: Config) -> str:
             )
         )
 
-    return render("model.py.jinja", {"models": models, "imports": collector.render()})
+    union_aliases = [
+        {
+            "name": to_class_name(u.name),
+            "members": " | ".join(to_class_name(m) for m in u.members),
+        }
+        for u in document.unions
+    ]
+
+    return render(
+        "model.py.jinja",
+        {
+            "models": models,
+            "union_aliases": union_aliases,
+            "imports": collector.render(),
+        },
+    )

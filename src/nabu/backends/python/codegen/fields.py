@@ -18,6 +18,21 @@ class FieldSpec:
 class ClassSpec:
     class_name: str
     fields: list[FieldSpec]
+    has_typename: bool = False
+
+
+@dataclass(frozen=True)
+class UnionSpec:
+    alias_name: str
+    member_classes: list[str]
+
+
+def make_typename_field(concrete_type_name: str) -> FieldSpec:
+    return FieldSpec(
+        name="typename",
+        annotation=f'Literal["{concrete_type_name}"]',
+        default=' = Field(alias="__typename")',
+    )
 
 
 def build_field(

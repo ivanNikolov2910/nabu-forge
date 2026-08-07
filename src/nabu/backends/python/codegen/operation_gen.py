@@ -1,6 +1,12 @@
 from nabu.analysis.index import IRIndex
 from nabu.backends.python.codegen.engine import render
-from nabu.backends.python.codegen.fields import ClassSpec, FieldSpec, build_field
+from nabu.backends.python.codegen.fields import (
+    ClassSpec,
+    FieldSpec,
+    UnionSpec,
+    build_field,
+    make_typename_field,
+)
 from nabu.backends.python.mapping.imports import ImportCollector
 from nabu.backends.python.mapping.names import to_class_name, to_field_name
 from nabu.backends.python.mapping.scalars import scalar_table
@@ -17,6 +23,12 @@ from nabu.ir.operations import (
 )
 from nabu.ir.types import NonNullTypeRef, unwrap_to_named
 from nabu.log import logger
+
+
+def _is_polymorphic(type_name: str, document: IRDocument) -> bool:
+    union_names = {u.name for u in document.unions}
+    interface_names = {i.name for i in document.interfaces}
+    return type_name in union_names or type_name in interface_names
 
 
 def _inline_fragments(
@@ -58,7 +70,8 @@ def _selection_fields(
     scalars: dict[str, str],
     enum_names: set[str],
     collector: ImportCollector,
-    out_classes: list[ClassSpec],
+    out_classes: list[ClassSpec | UnionSpec],
+    document: IRDocument,
 ) -> list[FieldSpec]:
     fields: list[FieldSpec] = []
 
@@ -71,28 +84,92 @@ def _selection_fields(
         field_name = selection.alias or selection.name
 
         if selection.selections:
-            child_class = prefix + to_class_name(field_name)
             named = unwrap_to_named(ir_field.type_ref)
             child_type = named.name if named else selection.name
-            child_fields = _selection_fields(
-                selection.selections,
-                child_type,
-                child_class,
-                index,
-                scalars,
-                enum_names,
-                collector,
-                out_classes,
-            )
-            out_classes.append(ClassSpec(class_name=child_class, fields=child_fields))
+            child_class_name = prefix + to_class_name(field_name)
             nullable = not isinstance(ir_field.type_ref, NonNullTypeRef)
-            fields.append(
-                FieldSpec(
-                    name=to_field_name(field_name),
-                    annotation=child_class + (" | None" if nullable else ""),
-                    default=" = None" if nullable else "",
+
+            inline_frags = [
+                inline_selection
+                for inline_selection in selection.selections
+                if isinstance(inline_selection, IRInlineFragment)
+            ]
+            is_polymorphic = _is_polymorphic(child_type, document) and inline_frags
+
+            if is_polymorphic:
+                member_names: list[str] = []
+                for fragment in inline_frags:
+                    member_class = (
+                        prefix
+                        + to_class_name(field_name)
+                        + to_class_name(fragment.on_type)
+                    )
+                    collector.add("typing.Literal")
+                    collector.add("pydantic.Field")
+                    collector.add("pydantic.ConfigDict")
+                    fragment_fields = [
+                        make_typename_field(fragment.on_type)
+                    ] + _selection_fields(
+                        fragment.selections,
+                        fragment.on_type,
+                        member_class,
+                        index,
+                        scalars,
+                        enum_names,
+                        collector,
+                        out_classes,
+                        document,
+                    )
+                    out_classes.append(
+                        ClassSpec(
+                            class_name=member_class,
+                            fields=fragment_fields,
+                            has_typename=True,
+                        )
+                    )
+                    member_names.append(member_class)
+
+                collector.add("typing.Annotated")
+                collector.add("pydantic.Field")
+                alias_name = child_class_name
+                out_classes.append(
+                    UnionSpec(
+                        alias_name=alias_name,
+                        member_classes=member_names,
+                    )
                 )
-            )
+                annotation = alias_name + (" | None" if nullable else "")
+                fields.append(
+                    FieldSpec(
+                        name=to_field_name(field_name),
+                        annotation=annotation,
+                        default=" = None" if nullable else "",
+                    )
+                )
+
+            else:
+                child_fields = _selection_fields(
+                    selection.selections,
+                    child_type,
+                    child_class_name,
+                    index,
+                    scalars,
+                    enum_names,
+                    collector,
+                    out_classes,
+                    document,
+                )
+                out_classes.append(
+                    ClassSpec(class_name=child_class_name, fields=child_fields)
+                )
+                annotation = child_class_name + (" | None" if nullable else "")
+                fields.append(
+                    FieldSpec(
+                        name=to_field_name(field_name),
+                        annotation=annotation,
+                        default=" = None" if nullable else "",
+                    )
+                )
         else:
             fields.append(
                 build_field(
@@ -104,7 +181,7 @@ def _selection_fields(
         if not isinstance(selection, IRInlineFragment):
             continue
         frag_class = prefix + to_class_name(selection.on_type)
-        frag_fields = _selection_fields(
+        fragment_fields = _selection_fields(
             selection.selections,
             selection.on_type,
             frag_class,
@@ -113,8 +190,9 @@ def _selection_fields(
             enum_names,
             collector,
             out_classes,
+            document,
         )
-        out_classes.append(ClassSpec(class_name=frag_class, fields=frag_fields))
+        out_classes.append(ClassSpec(class_name=frag_class, fields=fragment_fields))
         fields.append(
             FieldSpec(
                 name=to_field_name(selection.on_type),
@@ -142,15 +220,43 @@ def generate_operation(
     prefix = to_class_name(operation.name)
 
     inlined = _inline_fragments(operation.selections, fragments)
-    classes: list[ClassSpec] = []
+    classes: list[ClassSpec | UnionSpec] = []
     result_fields = _selection_fields(
-        inlined, root_type, prefix, index, scalars, enum_names, collector, classes
+        inlined,
+        root_type,
+        prefix,
+        index,
+        scalars,
+        enum_names,
+        collector,
+        classes,
+        document,
     )
+
+    class_entries = []
+    for entry in classes:
+        if isinstance(entry, ClassSpec):
+            class_entries.append(
+                {
+                    "kind": "class",
+                    "class_name": entry.class_name,
+                    "fields": entry.fields,
+                    "has_typename": entry.has_typename,
+                }
+            )
+        else:
+            class_entries.append(
+                {
+                    "kind": "union",
+                    "alias_name": entry.alias_name,
+                    "members": entry.member_classes,
+                }
+            )
 
     return render(
         "operation_model.py.jinja",
         {
-            "classes": classes,
+            "classes": class_entries,
             "result_class": f"{prefix}Result",
             "result_fields": result_fields,
             "imports": collector.render(),
