@@ -16,10 +16,11 @@ def _entries(module: str, items) -> list[dict]:
 
 def generate_exports(document: IRDocument) -> str:
     logger.debug("Generating __init__.py")
+    model_items = document.objects + document.interfaces + document.unions
     names = (
         [{"module": "client", "class_name": "Client"}]
         + _entries("enums", document.enums)
         + _entries("inputs", document.inputs)
-        + _entries("models", document.objects)
+        + _entries("models", model_items)
     )
     return render("init.py.jinja", {"names": names})

@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 
 class {{ entry.class_name }}(BaseModel):
-{%- if entry.has_typename %}
+{%- if entry.has_aliases %}
     model_config = ConfigDict(populate_by_name=True)
 {%- endif %}
 {%- for field in entry.fields %}
@@ -27,6 +27,9 @@ class {{ entry.class_name }}(BaseModel):
 
 
 class {{ result_class }}(BaseModel):
+{%- if result_has_aliases %}
+    model_config = ConfigDict(populate_by_name=True)
+{%- endif %}
 {%- for field in result_fields %}
     {{ field.name }}: {{ field.annotation }}{{ field.default }}
 {%- endfor %}

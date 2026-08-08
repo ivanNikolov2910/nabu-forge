@@ -161,3 +161,77 @@ def test_name_collision():
     ir = _ir(schema_sdl=schema, op_text="")
     result = analyse(ir, _config())
     assert any(d.code == ErrorCode.NAME_COLLISION for d in result.diagnostics)
+
+
+def test_argument_with_unknown_type_ref_produces_error():
+    from nabu.ir.definitions import IRArgument, IRField, IRObjectType
+    from nabu.ir.document import IRDocument
+    from nabu.ir.types import NamedTypeRef, NonNullTypeRef
+
+    phantom = NamedTypeRef(name="PhantomType")
+    arg = IRArgument(name="x", type_ref=NonNullTypeRef(inner=phantom))
+    field = IRField(
+        name="q",
+        type_ref=NamedTypeRef(name="String"),
+        arguments=[arg],
+        source_location=None,
+    )
+    obj = IRObjectType(
+        name="Query", fields=[field], interfaces=[], source_location=None
+    )
+    ir = IRDocument(
+        objects=[obj],
+        inputs=[],
+        enums=[],
+        scalars=[],
+        interfaces=[],
+        unions=[],
+        operations=[],
+        fragments=[],
+        query_fields=[],
+        mutation_fields=[],
+    )
+    result = analyse(ir, _config())
+    assert any(d.code == ErrorCode.UNKNOWN_TYPE_REF for d in result.diagnostics)
+
+
+def test_interface_field_resolved_via_interface_candidate():
+    schema = """
+    interface Node { id: ID! }
+    type Student implements Node { id: ID! name: String! }
+    type Query { student(id: ID!): Student }
+    """
+    op = "query Q($id: ID!) { student(id: $id) { id } }"
+    ir = _ir(schema_sdl=schema, op_text=op)
+    result = analyse(ir, _config())
+    assert not any(d.code == ErrorCode.UNKNOWN_FIELD for d in result.diagnostics)
+
+
+def test_direct_field_on_union_produces_error():
+    schema = """
+    type Cat { name: String! }
+    type Dog { name: String! }
+    union Animal = Cat | Dog
+    type Query { animal: Animal }
+    """
+    op = "query Q { animal { name } }"
+    ir = _ir(schema_sdl=schema, op_text=op)
+    result = analyse(ir, _config())
+    assert any(d.code == ErrorCode.UNKNOWN_FIELD for d in result.diagnostics)
+
+
+def test_no_operations_produces_no_diagnostics():
+    ir = _ir(op_text="")
+    result = analyse(ir, _config(DateTime="datetime.datetime", URL="str"))
+    assert not any(d.code == ErrorCode.UNKNOWN_FIELD for d in result.diagnostics)
+
+
+def test_unknown_field_on_regular_type():
+    schema = """
+    type Student { id: ID! }
+    type Query { student(id: ID!): Student }
+    """
+    op = 'query Q { student(id: "1") { id ghost } }'
+    ir = _ir(schema_sdl=schema, op_text=op)
+    result = analyse(ir, _config())
+    assert any(d.code == ErrorCode.UNKNOWN_FIELD for d in result.diagnostics)

@@ -171,7 +171,6 @@ def test_operation_enum_import(doc, cfg):
 def test_operation_nullable_result(doc, cfg):
     op = next(o for o in doc.operations if o.name == "GetBook")
     src = generate_operation(op, doc, cfg)
-    # book field on Query is nullable (Book, not Book!)
     assert "book: GetBookBook | None" in src
 
 
@@ -204,7 +203,6 @@ def test_mutation_resolves_against_mutation_root(cfg):
     d = build_ir(schema, docs).value
     op = d.operations[0]
     src = generate_operation(op, d, cfg)
-    # 'createBook' exists on Mutation, not Query — must be resolved
     assert "class CreateBookCreateBook(BaseModel)" in src
     assert "create_book: CreateBookCreateBook" in src
 
@@ -329,10 +327,6 @@ def test_university_end_to_end(tmp_path):
     assert hasattr(m, "CourseStatus")
 
 
-# ---------------------------------------------------------------------------
-# Phase 9: discriminated unions
-# ---------------------------------------------------------------------------
-
 POLY_SCHEMA = """
 enum Kind { A B }
 
@@ -376,7 +370,9 @@ def _poly_ir(tmp_path):
 def test_union_field_generates_discriminated_alias(tmp_path):
     doc, _ = _poly_ir(tmp_path)
     op = doc.operations[0]
-    src = generate_operation(op, doc, Config(schema="s", operations="o", output="out", scalars={}))
+    src = generate_operation(
+        op, doc, Config(schema="s", operations="o", output="out", scalars={})
+    )
     assert "Annotated[" in src
     assert 'Field(discriminator="typename")' in src
     assert "GetAnimalAnimalCat" in src
@@ -387,7 +383,9 @@ def test_union_field_generates_discriminated_alias(tmp_path):
 def test_union_member_class_has_typename_field(tmp_path):
     doc, _ = _poly_ir(tmp_path)
     op = doc.operations[0]
-    src = generate_operation(op, doc, Config(schema="s", operations="o", output="out", scalars={}))
+    src = generate_operation(
+        op, doc, Config(schema="s", operations="o", output="out", scalars={})
+    )
     assert 'Literal["Cat"]' in src
     assert 'Literal["Dog"]' in src
     assert 'Field(alias="__typename")' in src
@@ -396,25 +394,26 @@ def test_union_member_class_has_typename_field(tmp_path):
 def test_union_member_class_has_model_config(tmp_path):
     doc, _ = _poly_ir(tmp_path)
     op = doc.operations[0]
-    src = generate_operation(op, doc, Config(schema="s", operations="o", output="out", scalars={}))
+    src = generate_operation(
+        op, doc, Config(schema="s", operations="o", output="out", scalars={})
+    )
     assert "model_config = ConfigDict(populate_by_name=True)" in src
 
 
 def test_non_union_field_unchanged(doc, cfg):
     op = next(o for o in doc.operations if o.name == "GetBook")
     src = generate_operation(op, doc, cfg)
-    # non-polymorphic result — no discriminated union
     assert "Annotated[" not in src
     assert "discriminator" not in src
 
 
 def test_discriminated_union_deserialises(tmp_path):
-    """The generated discriminated union model must deserialise correctly at runtime."""
     doc, _ = _poly_ir(tmp_path)
     op = doc.operations[0]
-    src = generate_operation(op, doc, Config(schema="s", operations="o", output="out", scalars={}))
+    src = generate_operation(
+        op, doc, Config(schema="s", operations="o", output="out", scalars={})
+    )
 
-    # Write to tmp_path and import it
     op_dir = tmp_path / "operations"
     op_dir.mkdir()
     (op_dir / "__init__.py").write_text("")
@@ -424,8 +423,8 @@ def test_discriminated_union_deserialises(tmp_path):
     (op_dir / "get_animal.py").write_text(src)
 
     pkg = "discriminated_test_pkg"
-    # Register the root package so relative imports resolve
     import types as _types
+
     root_pkg = _types.ModuleType(pkg)
     root_pkg.__path__ = [str(tmp_path)]
     root_pkg.__package__ = pkg
@@ -435,7 +434,9 @@ def test_discriminated_union_deserialises(tmp_path):
     ops_pkg.__package__ = f"{pkg}.operations"
     sys.modules[f"{pkg}.operations"] = ops_pkg
 
-    enums_spec = importlib.util.spec_from_file_location(f"{pkg}.enums", tmp_path / "enums.py")
+    enums_spec = importlib.util.spec_from_file_location(
+        f"{pkg}.enums", tmp_path / "enums.py"
+    )
     enums_m = importlib.util.module_from_spec(enums_spec)
     sys.modules[f"{pkg}.enums"] = enums_m
     enums_spec.loader.exec_module(enums_m)
@@ -449,6 +450,7 @@ def test_discriminated_union_deserialises(tmp_path):
     spec.loader.exec_module(m)
 
     from pydantic import TypeAdapter
+
     Animal = m.GetAnimalAnimal
     adapter = TypeAdapter(Animal)
 
@@ -462,3 +464,172 @@ def test_discriminated_union_deserialises(tmp_path):
     result2 = adapter.validate_python(dog_data)
     assert type(result2).__name__ == "GetAnimalAnimalDog"
     assert result2.typename == "Dog"
+
+
+def test_list_field_generates_list_annotation(doc, cfg):
+    schema = build_schema(
+        Source(
+            """
+    type Tag { label: String! }
+    type Book { id: ID! tags: [Tag!]! }
+    type Query { book(id: ID!): Book }
+    """,
+            "s.graphqls",
+        )
+    )
+    op = parse(
+        Source(
+            "query GetBook($id: ID!) { book(id: $id) { id tags { label } } }",
+            "op.graphql",
+        )
+    )
+    d = build_ir(schema, [op]).value
+    src = generate_operation(d.operations[0], d, cfg)
+    assert "tags: list[GetBookBookTags]" in src
+
+
+def test_nullable_list_field_annotation(doc, cfg):
+    schema = build_schema(
+        Source(
+            """
+    type Tag { label: String! }
+    type Book { id: ID! tags: [Tag!] }
+    type Query { book(id: ID!): Book }
+    """,
+            "s.graphqls",
+        )
+    )
+    op = parse(
+        Source(
+            "query GetBook($id: ID!) { book(id: $id) { id tags { label } } }",
+            "op.graphql",
+        )
+    )
+    d = build_ir(schema, [op]).value
+    src = generate_operation(d.operations[0], d, cfg)
+    assert "tags: list[GetBookBookTags] | None" in src
+
+
+def test_camelcase_field_gets_alias(doc, cfg):
+    schema = build_schema(
+        Source(
+            """
+    type Course { courseCode: String! }
+    type Query { course: Course }
+    """,
+            "s.graphqls",
+        )
+    )
+    op = parse(Source("query GetCourse { course { courseCode } }", "op.graphql"))
+    d = build_ir(schema, [op]).value
+    src = generate_operation(d.operations[0], d, cfg)
+    assert 'alias="courseCode"' in src
+    assert "model_config = ConfigDict(populate_by_name=True)" in src
+
+
+def test_snake_case_field_no_alias(doc, cfg):
+    schema = build_schema(
+        Source(
+            """
+    type Item { id: ID! name: String! }
+    type Query { item: Item }
+    """,
+            "s.graphqls",
+        )
+    )
+    op = parse(Source("query GetItem { item { id name } }", "op.graphql"))
+    d = build_ir(schema, [op]).value
+    src = generate_operation(d.operations[0], d, cfg)
+    assert "alias=" not in src
+
+
+def test_models_camelcase_field_gets_alias(doc, cfg):
+    src = generate_models(doc, cfg)
+    assert 'alias="createdAt"' in src
+    assert "model_config = ConfigDict(populate_by_name=True)" in src
+
+
+def test_writer_removes_stale_files(tmp_path):
+    write_package(tmp_path, {"a.py": "x = 1\n", "b.py": "y = 2\n"})
+    write_package(tmp_path, {"a.py": "x = 1\n"})
+    assert (tmp_path / "a.py").exists()
+    assert not (tmp_path / "b.py").exists()
+
+
+def test_writer_oserror_returns_diagnostic(tmp_path):
+    from unittest.mock import patch
+
+    from nabu.backends.python.codegen.writer import write_package
+    from nabu.diagnostics.codes import ErrorCode
+
+    with patch("pathlib.Path.write_text", side_effect=OSError("disk full")):
+        result = write_package(tmp_path, {"x.py": "a = 1\n"})
+    assert result.failed
+    assert any(d.code == ErrorCode.WRITE_ERROR for d in result.diagnostics)
+
+
+def test_double_nonnull_wrap_annotation():
+    from nabu.backends.python.codegen.fields import wrap_annotation
+    from nabu.ir.types import NamedTypeRef, NonNullTypeRef
+
+    double = NonNullTypeRef(inner=NonNullTypeRef(inner=NamedTypeRef(name="Foo")))
+    assert wrap_annotation(double, "FooClass") == "FooClass"
+
+
+def test_top_level_inline_frags_on_non_poly_parent(cfg):
+    schema = build_schema(
+        Source(
+            """
+    interface Node { id: ID! }
+    type Cat implements Node { id: ID! name: String! }
+    type Query { node: Node }
+    """,
+            "s.graphqls",
+        )
+    )
+    op = parse(
+        Source(
+            """
+    query GetNode {
+        node {
+            ... on Cat { id name }
+        }
+    }
+    """,
+            "op.graphql",
+        )
+    )
+    d = build_ir(schema, [op]).value
+    src = generate_operation(d.operations[0], d, cfg)
+    assert "GetNodeNodeCat" in src
+
+
+def test_inline_fragments_unknown_selection_type():
+    from nabu.backends.python.codegen.operation_gen import _inline_fragments
+
+    class UnknownSel:
+        pass
+
+    unknown = UnknownSel()
+    result = _inline_fragments([unknown], {})
+    assert result == [unknown]
+
+
+def test_exports_include_interfaces_and_unions(doc):
+    # exports_gen.py — interfaces (Node) and union aliases render in models.py
+    # so they must also be exported from __init__.py, not just objects
+    src = generate_exports(doc)
+    assert "from .models import Node" in src  # interface, not a plain object
+
+
+def test_exports_union_alias():
+    # Union types render as aliases in models.py — must be exported too
+    schema = build_schema(Source("""
+    type Cat { name: String! }
+    type Dog { name: String! }
+    union Animal = Cat | Dog
+    type Query { animal: Animal }
+    """, "s.graphqls"))
+    d = build_ir(schema, []).value
+    src = generate_exports(d)
+    assert "from .models import Animal" in src

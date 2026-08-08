@@ -4,7 +4,7 @@ from __future__ import annotations
 {% endif %}
 
 SCALAR_MAP: dict[str, str] = {
-{%- for name, annotation in scalars %}
+    {%- for name, annotation in scalars %}
     "{{ name }}": "{{ annotation }}",
-{%- endfor %}
+    {%- endfor %}
 }

@@ -1,5 +1,9 @@
 from nabu.backends.python.codegen.engine import render
-from nabu.backends.python.codegen.fields import ClassSpec, build_fields
+from nabu.backends.python.codegen.fields import (
+    ClassSpec,
+    build_fields,
+    needs_model_config,
+)
 from nabu.backends.python.codegen.ordering import dependency_order
 from nabu.backends.python.mapping.imports import ImportCollector
 from nabu.backends.python.mapping.names import to_class_name
@@ -24,10 +28,15 @@ def generate_models(document: IRDocument, config: Config) -> str:
         ir_type = type_by_name.get(name)
         if ir_type is None:
             continue
+        fields = build_fields(ir_type.fields, scalars, enum_names, collector)
+        has_aliases = needs_model_config(fields)
+        if has_aliases:
+            collector.add("pydantic.ConfigDict")
         models.append(
             ClassSpec(
                 class_name=to_class_name(ir_type.name),
-                fields=build_fields(ir_type.fields, scalars, enum_names, collector),
+                fields=fields,
+                has_aliases=has_aliases,
             )
         )
 

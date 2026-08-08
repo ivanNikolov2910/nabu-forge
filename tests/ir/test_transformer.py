@@ -151,3 +151,25 @@ def test_empty_operations():
     doc = _ir()
     assert doc.operations == []
     assert doc.fragments == []
+
+
+def test_list_type_ref_in_operation():
+    doc = _ir("query Q($ids: [ID!]!) { student(id: $ids) { id } }")
+    var = doc.operations[0].variables[0]
+    from nabu.ir.types import ListTypeRef, NonNullTypeRef
+
+    assert isinstance(var.type_ref, NonNullTypeRef)
+    assert isinstance(var.type_ref.inner, ListTypeRef)
+
+
+def test_unsupported_selection_node_raises():
+    from nabu.ir.transformer import _selection
+
+    class FakeNode:
+        pass
+
+    try:
+        _selection(FakeNode())
+        assert False, "should have raised"
+    except TypeError as e:
+        assert "Unsupported selection node" in str(e)

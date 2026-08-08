@@ -6,6 +6,8 @@ from nabu.backends.python.codegen.fields import (
     UnionSpec,
     build_field,
     make_typename_field,
+    needs_model_config,
+    wrap_annotation,
 )
 from nabu.backends.python.mapping.imports import ImportCollector
 from nabu.backends.python.mapping.names import to_class_name, to_field_name
@@ -21,7 +23,7 @@ from nabu.ir.operations import (
     IROperationType,
     IRSelection,
 )
-from nabu.ir.types import NonNullTypeRef, unwrap_to_named
+from nabu.ir.types import unwrap_to_named
 from nabu.log import logger
 
 
@@ -35,31 +37,48 @@ def _inline_fragments(
     selections: list[IRSelection], fragments: dict[str, IRFragment]
 ) -> list[IRSelection]:
     result: list[IRSelection] = []
-    for selection in selections:
-        if isinstance(selection, IRFragmentSpread):
-            fragment = fragments.get(selection.name)
-            if fragment:
-                result.extend(_inline_fragments(fragment.selections, fragments))
-        elif isinstance(selection, IRFieldSelection):
+    for sel in selections:
+        if isinstance(sel, IRFragmentSpread):
+            frag = fragments.get(sel.name)
+            if frag:
+                result.extend(_inline_fragments(frag.selections, fragments))
+        elif isinstance(sel, IRFieldSelection):
             result.append(
                 IRFieldSelection(
-                    name=selection.name,
-                    alias=selection.alias,
-                    arguments=selection.arguments,
-                    selections=_inline_fragments(selection.selections, fragments),
-                    source_location=selection.source_location,
+                    name=sel.name,
+                    alias=sel.alias,
+                    arguments=sel.arguments,
+                    selections=_inline_fragments(sel.selections, fragments),
+                    source_location=sel.source_location,
                 )
             )
-        elif isinstance(selection, IRInlineFragment):
+        elif isinstance(sel, IRInlineFragment):
             result.append(
                 IRInlineFragment(
-                    on_type=selection.on_type,
-                    selections=_inline_fragments(selection.selections, fragments),
+                    on_type=sel.on_type,
+                    selections=_inline_fragments(sel.selections, fragments),
                 )
             )
         else:
-            result.append(selection)
+            result.append(sel)
     return result
+
+
+def _nested_field_spec(
+    wire_name: str, annotation: str, collector: ImportCollector
+) -> FieldSpec:
+    snake = to_field_name(wire_name)
+    nullable = "| None" in annotation
+    if snake != wire_name:
+        collector.add("pydantic.Field")
+        default = (
+            f' = Field(None, alias="{wire_name}")'
+            if nullable
+            else f' = Field(..., alias="{wire_name}")'
+        )
+    else:
+        default = " = None" if nullable else ""
+    return FieldSpec(name=snake, annotation=annotation, default=default)
 
 
 def _selection_fields(
@@ -75,83 +94,64 @@ def _selection_fields(
 ) -> list[FieldSpec]:
     fields: list[FieldSpec] = []
 
-    for selection in selections:
-        if not isinstance(selection, IRFieldSelection):
+    for sel in selections:
+        if isinstance(sel, IRInlineFragment):
+            frag_class = prefix + to_class_name(sel.on_type)
+            frag_fields = _selection_fields(
+                sel.selections,
+                sel.on_type,
+                frag_class,
+                index,
+                scalars,
+                enum_names,
+                collector,
+                out_classes,
+                document,
+            )
+            out_classes.append(ClassSpec(class_name=frag_class, fields=frag_fields))
+            fields.append(
+                FieldSpec(
+                    name=to_field_name(sel.on_type),
+                    annotation=f"{frag_class} | None",
+                    default=" = None",
+                )
+            )
             continue
-        ir_field = index.field_of(parent_type, selection.name)
+
+        if not isinstance(sel, IRFieldSelection):
+            continue
+
+        ir_field = index.field_of(parent_type, sel.name)
         if ir_field is None:
             continue
-        field_name = selection.alias or selection.name
 
-        if selection.selections:
-            named = unwrap_to_named(ir_field.type_ref)
-            child_type = named.name if named else selection.name
-            child_class_name = prefix + to_class_name(field_name)
-            nullable = not isinstance(ir_field.type_ref, NonNullTypeRef)
+        wire_name = sel.alias or sel.name
 
-            inline_frags = [
-                inline_selection
-                for inline_selection in selection.selections
-                if isinstance(inline_selection, IRInlineFragment)
-            ]
-            is_polymorphic = _is_polymorphic(child_type, document) and inline_frags
-
-            if is_polymorphic:
-                member_names: list[str] = []
-                for fragment in inline_frags:
-                    member_class = (
-                        prefix
-                        + to_class_name(field_name)
-                        + to_class_name(fragment.on_type)
-                    )
-                    collector.add("typing.Literal")
-                    collector.add("pydantic.Field")
-                    collector.add("pydantic.ConfigDict")
-                    fragment_fields = [
-                        make_typename_field(fragment.on_type)
-                    ] + _selection_fields(
-                        fragment.selections,
-                        fragment.on_type,
-                        member_class,
-                        index,
-                        scalars,
-                        enum_names,
-                        collector,
-                        out_classes,
-                        document,
-                    )
-                    out_classes.append(
-                        ClassSpec(
-                            class_name=member_class,
-                            fields=fragment_fields,
-                            has_typename=True,
-                        )
-                    )
-                    member_names.append(member_class)
-
-                collector.add("typing.Annotated")
-                collector.add("pydantic.Field")
-                alias_name = child_class_name
-                out_classes.append(
-                    UnionSpec(
-                        alias_name=alias_name,
-                        member_classes=member_names,
-                    )
+        if not sel.selections:
+            fields.append(
+                build_field(
+                    ir_field, scalars, enum_names, collector, enums_module="..enums"
                 )
-                annotation = alias_name + (" | None" if nullable else "")
-                fields.append(
-                    FieldSpec(
-                        name=to_field_name(field_name),
-                        annotation=annotation,
-                        default=" = None" if nullable else "",
-                    )
-                )
+            )
+            continue
 
-            else:
-                child_fields = _selection_fields(
-                    selection.selections,
-                    child_type,
-                    child_class_name,
+        named = unwrap_to_named(ir_field.type_ref)
+        child_type = named.name if named else sel.name
+        child_class = prefix + to_class_name(wire_name)
+        inline_frags = [s for s in sel.selections if isinstance(s, IRInlineFragment)]
+
+        if _is_polymorphic(child_type, document) and inline_frags:
+            collector.add("typing.Literal")
+            collector.add("typing.Annotated")
+            collector.add("pydantic.Field")
+            collector.add("pydantic.ConfigDict")
+            member_names: list[str] = []
+            for frag in inline_frags:
+                member_class = child_class + to_class_name(frag.on_type)
+                frag_fields = [make_typename_field(frag.on_type)] + _selection_fields(
+                    frag.selections,
+                    frag.on_type,
+                    member_class,
                     index,
                     scalars,
                     enum_names,
@@ -160,46 +160,37 @@ def _selection_fields(
                     document,
                 )
                 out_classes.append(
-                    ClassSpec(class_name=child_class_name, fields=child_fields)
-                )
-                annotation = child_class_name + (" | None" if nullable else "")
-                fields.append(
-                    FieldSpec(
-                        name=to_field_name(field_name),
-                        annotation=annotation,
-                        default=" = None" if nullable else "",
+                    ClassSpec(
+                        class_name=member_class, fields=frag_fields, has_aliases=True
                     )
                 )
+                member_names.append(member_class)
+            out_classes.append(
+                UnionSpec(alias_name=child_class, member_classes=member_names)
+            )
         else:
-            fields.append(
-                build_field(
-                    ir_field, scalars, enum_names, collector, enums_module="..enums"
+            child_fields = _selection_fields(
+                sel.selections,
+                child_type,
+                child_class,
+                index,
+                scalars,
+                enum_names,
+                collector,
+                out_classes,
+                document,
+            )
+            has_aliases = needs_model_config(child_fields)
+            if has_aliases:
+                collector.add("pydantic.ConfigDict")
+            out_classes.append(
+                ClassSpec(
+                    class_name=child_class, fields=child_fields, has_aliases=has_aliases
                 )
             )
 
-    for selection in selections:
-        if not isinstance(selection, IRInlineFragment):
-            continue
-        frag_class = prefix + to_class_name(selection.on_type)
-        fragment_fields = _selection_fields(
-            selection.selections,
-            selection.on_type,
-            frag_class,
-            index,
-            scalars,
-            enum_names,
-            collector,
-            out_classes,
-            document,
-        )
-        out_classes.append(ClassSpec(class_name=frag_class, fields=fragment_fields))
-        fields.append(
-            FieldSpec(
-                name=to_field_name(selection.on_type),
-                annotation=f"{frag_class} | None",
-                default=" = None",
-            )
-        )
+        annotation = wrap_annotation(ir_field.type_ref, child_class)
+        fields.append(_nested_field_spec(wire_name, annotation, collector))
 
     return fields
 
@@ -211,18 +202,17 @@ def generate_operation(
     scalars = scalar_table(config.scalars)
     index = IRIndex(document)
     collector = ImportCollector()
-    fragments = {fragment.name: fragment for fragment in document.fragments}
-    enum_names = {enum_.name for enum_ in document.enums}
+    fragments = {f.name: f for f in document.fragments}
+    enum_names = {e.name for e in document.enums}
 
     root_type = (
         "Query" if operation.operation_type == IROperationType.QUERY else "Mutation"
     )
     prefix = to_class_name(operation.name)
 
-    inlined = _inline_fragments(operation.selections, fragments)
     classes: list[ClassSpec | UnionSpec] = []
     result_fields = _selection_fields(
-        inlined,
+        _inline_fragments(operation.selections, fragments),
         root_type,
         prefix,
         index,
@@ -233,25 +223,21 @@ def generate_operation(
         document,
     )
 
-    class_entries = []
-    for entry in classes:
-        if isinstance(entry, ClassSpec):
-            class_entries.append(
-                {
-                    "kind": "class",
-                    "class_name": entry.class_name,
-                    "fields": entry.fields,
-                    "has_typename": entry.has_typename,
-                }
-            )
-        else:
-            class_entries.append(
-                {
-                    "kind": "union",
-                    "alias_name": entry.alias_name,
-                    "members": entry.member_classes,
-                }
-            )
+    result_has_aliases = needs_model_config(result_fields)
+    if result_has_aliases:
+        collector.add("pydantic.ConfigDict")
+
+    class_entries = [
+        {
+            "kind": "class",
+            "class_name": e.class_name,
+            "fields": e.fields,
+            "has_aliases": e.has_aliases,
+        }
+        if isinstance(e, ClassSpec)
+        else {"kind": "union", "alias_name": e.alias_name, "members": e.member_classes}
+        for e in classes
+    ]
 
     return render(
         "operation_model.py.jinja",
@@ -259,6 +245,7 @@ def generate_operation(
             "classes": class_entries,
             "result_class": f"{prefix}Result",
             "result_fields": result_fields,
+            "result_has_aliases": result_has_aliases,
             "imports": collector.render(),
         },
     )
@@ -266,8 +253,6 @@ def generate_operation(
 
 def generate_operations(document: IRDocument, config: Config) -> dict[str, str]:
     return {
-        f"{to_field_name(operation.name)}.py": generate_operation(
-            operation, document, config
-        )
-        for operation in document.operations
+        f"{to_field_name(op.name)}.py": generate_operation(op, document, config)
+        for op in document.operations
     }
