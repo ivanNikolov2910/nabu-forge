@@ -16,7 +16,7 @@ def generate_models(document: IRDocument, config: Config) -> str:
     collector = ImportCollector()
     enum_names = {e.name for e in document.enums}
     type_by_name: dict[str, IRObjectType | IRInterfaceType] = {
-        t.name: t for t in document.objects + document.interfaces
+        type_.name: type_ for type_ in document.objects + document.interfaces
     }
 
     models = []
@@ -28,10 +28,10 @@ def generate_models(document: IRDocument, config: Config) -> str:
 
     union_aliases = [
         {
-            "name": to_class_name(u.name),
-            "members": " | ".join(to_class_name(m) for m in u.members),
+            "name": to_class_name(union.name),
+            "members": " | ".join(to_class_name(member) for member in union.members),
         }
-        for u in document.unions
+        for union in document.unions
     ]
 
     return render(

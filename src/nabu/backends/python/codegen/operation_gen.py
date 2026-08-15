@@ -40,8 +40,8 @@ class _GenContext:
 
 
 def _is_polymorphic(type_name: str, document: IRDocument) -> bool:
-    union_names = {u.name for u in document.unions}
-    interface_names = {i.name for i in document.interfaces}
+    union_names = {union.name for union in document.unions}
+    interface_names = {interface.name for interface in document.interfaces}
     return type_name in union_names or type_name in interface_names
 
 
@@ -49,30 +49,30 @@ def _inline_fragments(
     selections: list[IRSelection], fragments: dict[str, IRFragment]
 ) -> list[IRSelection]:
     result: list[IRSelection] = []
-    for sel in selections:
-        if isinstance(sel, IRFragmentSpread):
-            frag = fragments.get(sel.name)
-            if frag:
-                result.extend(_inline_fragments(frag.selections, fragments))
-        elif isinstance(sel, IRFieldSelection):
+    for selection in selections:
+        if isinstance(selection, IRFragmentSpread):
+            fragment = fragments.get(selection.name)
+            if fragment:
+                result.extend(_inline_fragments(fragment.selections, fragments))
+        elif isinstance(selection, IRFieldSelection):
             result.append(
                 IRFieldSelection(
-                    name=sel.name,
-                    alias=sel.alias,
-                    arguments=sel.arguments,
-                    selections=_inline_fragments(sel.selections, fragments),
-                    source_location=sel.source_location,
+                    name=selection.name,
+                    alias=selection.alias,
+                    arguments=selection.arguments,
+                    selections=_inline_fragments(selection.selections, fragments),
+                    source_location=selection.source_location,
                 )
             )
-        elif isinstance(sel, IRInlineFragment):
+        elif isinstance(selection, IRInlineFragment):
             result.append(
                 IRInlineFragment(
-                    on_type=sel.on_type,
-                    selections=_inline_fragments(sel.selections, fragments),
+                    on_type=selection.on_type,
+                    selections=_inline_fragments(selection.selections, fragments),
                 )
             )
         else:
-            result.append(sel)
+            result.append(selection)
     return result
 
 
@@ -104,32 +104,32 @@ def _selection_fields(
 ) -> list[FieldSpec]:
     fields: list[FieldSpec] = []
 
-    for sel in selections:
-        if isinstance(sel, IRInlineFragment):
-            frag_class = prefix + to_class_name(sel.on_type)
+    for selection in selections:
+        if isinstance(selection, IRInlineFragment):
+            frag_class = prefix + to_class_name(selection.on_type)
             frag_fields = _selection_fields(
-                sel.selections, sel.on_type, frag_class, ctx
+                selection.selections, selection.on_type, frag_class, ctx
             )
             ctx.out_classes.append(ClassSpec(class_name=frag_class, fields=frag_fields))
             fields.append(
                 FieldSpec(
-                    name=to_field_name(sel.on_type),
+                    name=to_field_name(selection.on_type),
                     annotation=f"{frag_class} | None",
                     default=" = None",
                 )
             )
             continue
 
-        if not isinstance(sel, IRFieldSelection):
+        if not isinstance(selection, IRFieldSelection):
             continue
 
-        ir_field = ctx.index.field_of(parent_type, sel.name)
+        ir_field = ctx.index.field_of(parent_type, selection.name)
         if ir_field is None:
             continue
 
-        wire_name = sel.alias or sel.name
+        wire_name = selection.alias or selection.name
 
-        if not sel.selections:
+        if not selection.selections:
             field = build_field_spec(
                 ir_field,
                 ctx.scalars,
@@ -137,8 +137,8 @@ def _selection_fields(
                 ctx.collector,
                 enums_module="..enums",
             )
-            if sel.alias and sel.alias != ir_field.name:
-                snake = to_field_name(sel.alias)
+            if selection.alias and selection.alias != ir_field.name:
+                snake = to_field_name(selection.alias)
                 nullable = (
                     "| None" in field.annotation
                     or field.default.startswith(" = None")
@@ -146,9 +146,9 @@ def _selection_fields(
                 )
                 ctx.collector.add("pydantic.Field")
                 default = (
-                    f' = Field(None, alias="{sel.alias}")'
+                    f' = Field(None, alias="{selection.alias}")'
                     if nullable
-                    else f' = Field(..., alias="{sel.alias}")'
+                    else f' = Field(..., alias="{selection.alias}")'
                 )
                 field = FieldSpec(
                     name=snake, annotation=field.annotation, default=default
@@ -157,21 +157,34 @@ def _selection_fields(
             continue
 
         named = unwrap_to_named(ir_field.type_ref)
-        child_type = named.name if named else sel.name
+        child_type = named.name if named else selection.name
         child_class = prefix + to_class_name(wire_name)
-        inline_frags = [s for s in sel.selections if isinstance(s, IRInlineFragment)]
+        inline_frags = [
+            selection
+            for selection in selection.selections
+            if isinstance(selection, IRInlineFragment)
+        ]
 
         if _is_polymorphic(child_type, ctx.document) and inline_frags:
             ctx.collector.add("typing.Literal")
             ctx.collector.add("typing.Annotated")
             ctx.collector.add("pydantic.Field")
             ctx.collector.add("pydantic.ConfigDict")
-            shared_sels = [s for s in sel.selections if isinstance(s, IRFieldSelection)]
+            shared_sels = [
+                selection
+                for selection in selection.selections
+                if isinstance(selection, IRFieldSelection)
+            ]
             member_names: list[str] = []
-            for frag in inline_frags:
-                member_class = child_class + to_class_name(frag.on_type)
-                frag_fields = [make_typename_field(frag.on_type)] + _selection_fields(
-                    shared_sels + list(frag.selections), frag.on_type, member_class, ctx
+            for fragment in inline_frags:
+                member_class = child_class + to_class_name(fragment.on_type)
+                frag_fields = [
+                    make_typename_field(fragment.on_type)
+                ] + _selection_fields(
+                    shared_sels + list(fragment.selections),
+                    fragment.on_type,
+                    member_class,
+                    ctx,
                 )
                 ctx.out_classes.append(
                     ClassSpec(
@@ -184,7 +197,7 @@ def _selection_fields(
             )
         else:
             child_fields = _selection_fields(
-                sel.selections, child_type, child_class, ctx
+                selection.selections, child_type, child_class, ctx
             )
             has_aliases = needs_model_config(child_fields)
             if has_aliases:
@@ -201,7 +214,7 @@ def _selection_fields(
                 wire_name,
                 annotation,
                 ctx.collector,
-                explicit_alias=sel.alias is not None,
+                explicit_alias=selection.alias is not None,
             )
         )
 
@@ -251,6 +264,8 @@ def generate_operation(
 
 def generate_operations(document: IRDocument, config: Config) -> dict[str, str]:
     return {
-        f"{to_field_name(op.name)}.py": generate_operation(op, document, config)
-        for op in document.operations
+        f"{to_field_name(operation.name)}.py": generate_operation(
+            operation, document, config
+        )
+        for operation in document.operations
     }

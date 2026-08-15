@@ -45,4 +45,6 @@ def write_package(output_dir: Path, files: dict[str, str]) -> Result[WriteStats]
                 message=f"Failed to write generated package: {e}",
             )
         )
-    return Result(value=WriteStats(written=written, skipped=skipped), diagnostics=diagnostics)
+    return Result(
+        value=WriteStats(written=written, skipped=skipped), diagnostics=diagnostics
+    )

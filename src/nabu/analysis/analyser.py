@@ -1,8 +1,10 @@
 from nabu.analysis.index import IRIndex
+from nabu.backends.python.mapping import type_mapper
 from nabu.config.loader import Config
 from nabu.diagnostics.codes import ErrorCode
 from nabu.diagnostics.diagnostic import Diagnostic
 from nabu.diagnostics.result import Result
+from nabu.ir import operations
 from nabu.ir.definitions import IRInterfaceType, IRObjectType, IRUnionType
 from nabu.ir.document import IRDocument
 from nabu.ir.location import SourceLocation
@@ -86,10 +88,10 @@ def _check_type_references(document: IRDocument, index: IRIndex) -> list[Diagnos
     logger.debug("Checking type references")
     diagnostics: list[Diagnostic] = []
     for obj in document.objects + document.inputs + document.interfaces:
-        for f in obj.fields:
-            _check_ref(f.type_ref, _location(f), index, diagnostics)
-            for arg in f.arguments:
-                _check_ref(arg.type_ref, _location(f), index, diagnostics)
+        for field in obj.fields:
+            _check_ref(field.type_ref, _location(field), index, diagnostics)
+            for arg in field.arguments:
+                _check_ref(arg.type_ref, _location(field), index, diagnostics)
     for op in document.operations:
         for var in op.variables:
             if not index.is_defined(next(iter(_named_refs(var.type_ref)), "")):
@@ -109,22 +111,22 @@ def _check_custom_scalars(document: IRDocument, config: Config) -> list[Diagnost
     return [
         _produce_error(
             ErrorCode.UNMAPPED_SCALAR,
-            f"No Python mapping configured for custom scalar '{s.name}'.",
-            _location(s),
-            hint=f'Add to nabu.toml: [scalars]\n{s.name} = "..."',
+            f"No Python mapping configured for custom scalar '{scalar.name}'.",
+            _location(scalar),
+            hint=f'Add to nabu.toml: [scalars]\n{scalar.name} = "..."',
         )
-        for s in document.scalars
-        if not s.builtin and s.name not in config.scalars
+        for scalar in document.scalars
+        if not scalar.builtin and scalar.name not in config.scalars
     ]
 
 
 def _parent_type_after_field(
     field_name: str, parent: str, index: IRIndex
 ) -> str | None:
-    f = index.field_of(parent, field_name)
-    if f is None:
+    field = index.field_of(parent, field_name)
+    if field is None:
         return None
-    named = unwrap_to_named(f.type_ref)
+    named = unwrap_to_named(field.type_ref)
     return named.name if named else None
 
 
@@ -149,50 +151,54 @@ def _check_selection_set(
 ) -> None:
     is_union = isinstance(index.types.get(parent_type), IRUnionType)
 
-    for sel in selections:
-        if isinstance(sel, IRFieldSelection):
+    for selection in selections:
+        if isinstance(selection, IRFieldSelection):
             if is_union:
                 diagnostics.append(
                     _produce_error(
                         ErrorCode.UNKNOWN_FIELD,
-                        f"Cannot select field '{sel.name}' directly on union type '{parent_type}'. Use inline fragments.",
-                        _location(sel),
+                        f"Cannot select field '{selection.name}' directly on union type '{parent_type}'. Use inline fragments.",
+                        _location(selection),
                     )
                 )
                 continue
 
-            next_type = _resolve_field(sel.name, parent_type, index)
+            next_type = _resolve_field(selection.name, parent_type, index)
             if next_type is None:
                 diagnostics.append(
                     _produce_error(
                         ErrorCode.UNKNOWN_FIELD,
-                        f"Field '{sel.name}' does not exist on type '{parent_type}'.",
-                        _location(sel),
+                        f"Field '{selection.name}' does not exist on type '{parent_type}'.",
+                        _location(selection),
                     )
                 )
                 continue
 
-            if sel.selections:
-                _check_selection_set(sel.selections, next_type, index, diagnostics)
+            if selection.selections:
+                _check_selection_set(
+                    selection.selections, next_type, index, diagnostics
+                )
 
-        elif isinstance(sel, IRInlineFragment):
-            if not index.is_defined(sel.on_type):
+        elif isinstance(selection, IRInlineFragment):
+            if not index.is_defined(selection.on_type):
                 diagnostics.append(
                     _produce_error(
                         ErrorCode.BAD_FRAGMENT_TARGET,
-                        f"Inline fragment target type '{sel.on_type}' is not defined.",
+                        f"Inline fragment target type '{selection.on_type}' is not defined.",
                         None,
                     )
                 )
             else:
-                _check_selection_set(sel.selections, sel.on_type, index, diagnostics)
+                _check_selection_set(
+                    selection.selections, selection.on_type, index, diagnostics
+                )
 
-        elif isinstance(sel, IRFragmentSpread):
-            if sel.name not in index.fragments:
+        elif isinstance(selection, IRFragmentSpread):
+            if selection.name not in index.fragments:
                 diagnostics.append(
                     _produce_error(
                         ErrorCode.UNKNOWN_FRAGMENT,
-                        f"Fragment '{sel.name}' is not defined.",
+                        f"Fragment '{selection.name}' is not defined.",
                         None,
                     )
                 )
@@ -201,10 +207,13 @@ def _check_selection_set(
 def _check_selections(document: IRDocument, index: IRIndex) -> list[Diagnostic]:
     logger.debug("Checking selections")
     diagnostics: list[Diagnostic] = []
-    for op in document.operations:
-        logger.debug("Checking selections for operation %s", op.name)
+    for operation in document.operations:
+        logger.debug("Checking selections for operation %s", operation.name)
         _check_selection_set(
-            op.selections, _ROOT_MAP[op.operation_type], index, diagnostics
+            operation.selections,
+            _ROOT_MAP[operation.operation_type],
+            index,
+            diagnostics,
         )
     return diagnostics
 
@@ -212,17 +221,19 @@ def _check_selections(document: IRDocument, index: IRIndex) -> list[Diagnostic]:
 def _check_fragments(document: IRDocument, index: IRIndex) -> list[Diagnostic]:
     logger.debug("Checking fragments")
     diagnostics: list[Diagnostic] = []
-    for frag in document.fragments:
-        if not index.is_defined(frag.on_type):
+    for fragment in document.fragments:
+        if not index.is_defined(fragment.on_type):
             diagnostics.append(
                 _produce_error(
                     ErrorCode.BAD_FRAGMENT_TARGET,
-                    f"Fragment '{frag.name}' targets undefined type '{frag.on_type}'.",
+                    f"Fragment '{fragment.name}' targets undefined type '{fragment.on_type}'.",
                     None,
                 )
             )
         else:
-            _check_selection_set(frag.selections, frag.on_type, index, diagnostics)
+            _check_selection_set(
+                fragment.selections, fragment.on_type, index, diagnostics
+            )
     return diagnostics
 
 
@@ -231,24 +242,24 @@ def _check_naming(document: IRDocument) -> list[Diagnostic]:
     diagnostics: list[Diagnostic] = []
     seen: dict[str, str] = {}
 
-    for t in (
+    for type_ in (
         document.objects
         + document.inputs
         + document.enums
         + document.interfaces
         + document.unions
     ):
-        cls = _to_pascal_case(t.name)
+        cls = _to_pascal_case(type_.name)
         if cls in seen:
             diagnostics.append(
                 _produce_error(
                     ErrorCode.NAME_COLLISION,
-                    f"Types '{t.name}' and '{seen[cls]}' both produce the identifier '{cls}'.",
+                    f"Types '{type_.name}' and '{seen[cls]}' both produce the identifier '{cls}'.",
                     None,
                 )
             )
         else:
-            seen[cls] = t.name
+            seen[cls] = type_.name
 
     return diagnostics
 
@@ -258,12 +269,12 @@ def _check_unsupported(document: IRDocument) -> list[Diagnostic]:
     return [
         _produce_error(
             ErrorCode.UNSUPPORTED_FEATURE,
-            f"Subscription operation '{op.name}' is not supported by Nabu Forge.",
-            _location(op),
+            f"Subscription operation '{operation.name}' is not supported by Nabu Forge.",
+            _location(operation),
             hint="Remove the subscription or implement it separately.",
         )
-        for op in document.operations
-        if op.operation_type == IROperationType.SUBSCRIPTION
+        for operation in document.operations
+        if operation.operation_type == IROperationType.SUBSCRIPTION
     ]
 
 

@@ -231,7 +231,7 @@ def _build_operations(documents: list[DocumentNode], doc: IRDocument) -> None:
 def build_ir(
     schema: GraphQLSchema, documents: list[DocumentNode]
 ) -> Result[IRDocument]:
-    doc = IRDocument(
+    document = IRDocument(
         objects=[],
         inputs=[],
         enums=[],
@@ -241,10 +241,10 @@ def build_ir(
         operations=[],
         fragments=[],
     )
-    _build_definitions(schema, doc)
-    _build_operations(documents, doc)
+    _build_definitions(schema, document)
+    _build_operations(documents, document)
     if schema.query_type:
-        doc.query_fields = _ir_fields(schema.query_type.fields)
+        document.query_fields = _ir_fields(schema.query_type.fields)
     if schema.mutation_type:
-        doc.mutation_fields = _ir_fields(schema.mutation_type.fields)
-    return Result(value=doc, diagnostics=[])
+        document.mutation_fields = _ir_fields(schema.mutation_type.fields)
+    return Result(value=document, diagnostics=[])

@@ -49,12 +49,12 @@ def _operation_documents(operations_files: list[Path]) -> dict[str, str]:
             needed, seen = [], set()
             pending = _FRAGMENT_SPREAD.findall(block)
             while pending:
-                frag = pending.pop()
-                if frag in seen or frag not in fragments:
+                fragment = pending.pop()
+                if fragment in seen or fragment not in fragments:
                     continue
-                seen.add(frag)
-                needed.append(fragments[frag])
-                pending.extend(_FRAGMENT_SPREAD.findall(fragments[frag]))
+                seen.add(fragment)
+                needed.append(fragments[fragment])
+                pending.extend(_FRAGMENT_SPREAD.findall(fragments[fragment]))
             documents[operation_name] = _inject_typename("\n\n".join([block, *needed]))
     return documents
 

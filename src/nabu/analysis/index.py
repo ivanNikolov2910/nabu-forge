@@ -31,7 +31,7 @@ class IRIndex:
     fragments: dict[str, IRFragment] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        for t in (
+        for type_ in (
             self.document.objects
             + self.document.inputs
             + self.document.enums
@@ -39,9 +39,9 @@ class IRIndex:
             + self.document.interfaces
             + self.document.unions
         ):
-            self.types[t.name] = t
-        for f in self.document.fragments:
-            self.fragments[f.name] = f
+            self.types[type_.name] = type_
+        for fragment in self.document.fragments:
+            self.fragments[fragment.name] = fragment
         for name, fields in (
             ("Query", self.document.query_fields),
             ("Mutation", self.document.mutation_fields),
@@ -55,7 +55,7 @@ class IRIndex:
         return name in self.types or name in BUILTIN_SCALARS
 
     def field_of(self, type_name: str, field_name: str) -> IRField | None:
-        t = self.types.get(type_name)
-        if t is None or not hasattr(t, "fields"):
+        type_ = self.types.get(type_name)
+        if type_ is None or not hasattr(type_, "fields"):
             return None
-        return next((f for f in t.fields if f.name == field_name), None)
+        return next((f for f in type_.fields if f.name == field_name), None)
