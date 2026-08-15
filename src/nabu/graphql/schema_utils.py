@@ -5,9 +5,9 @@ BUILTIN_SCALARS: frozenset[str] = frozenset({"String", "Int", "Float", "Boolean"
 
 def root_type_names(schema: GraphQLSchema) -> set[str]:
     return {
-        t.name
-        for t in (schema.query_type, schema.mutation_type, schema.subscription_type)
-        if t is not None
+        type_.name
+        for type_ in (schema.query_type, schema.mutation_type, schema.subscription_type)
+        if type_ is not None
     }
 
 

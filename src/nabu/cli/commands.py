@@ -32,6 +32,28 @@ def validate(
     typer.echo("OK")
 
 
+def generate(
+    config_path: Annotated[
+        Path,
+        typer.Option(
+            "--config", "-c", help="Path to nabu.toml, defaults to ./nabu.toml."
+        ),
+    ] = Path("nabu.toml"),
+) -> None:
+    ctx = CompilerContext(config_path)
+    ctx.load()
+    ctx.verify()
+    schema = ctx.parse_schema()
+    documents = ctx.parse_operations(schema)
+    ir = ctx.build_ir(schema, documents)
+    ctx.analyse(ir)
+    stats, elapsed = ctx.generate(ir)
+    typer.echo(
+        f"OK  files={stats.total}  written={stats.written}"
+        f"  skipped={stats.skipped}  time={elapsed:.2f}s"
+    )
+
+
 def inspect(
     schema: Annotated[
         Path, typer.Option("--schema", "-s", help="Path to the GraphQL schema file.")
@@ -41,13 +63,13 @@ def inspect(
     parsed = reporter.collect(parse_schema(schema))
     if parsed is None:
         return
-    s = summarise(parsed)
+    summary = summarise(parsed)
     typer.echo(f"Schema: {schema}\n")
-    typer.echo(f"  Object types : {len(s.object_types)}")
-    typer.echo(f"  Input types  : {len(s.input_types)}")
-    typer.echo(f"  Enums        : {len(s.enums)}")
-    typer.echo(f"  Scalars      : {len(s.scalars)}")
-    typer.echo(f"  Interfaces   : {len(s.interfaces)}")
-    typer.echo(f"  Unions       : {len(s.unions)}")
-    typer.echo(f"  Queries      : {len(s.queries)}")
-    typer.echo(f"  Mutations    : {len(s.mutations)}")
+    typer.echo(f"  Object types : {len(summary.object_types)}")
+    typer.echo(f"  Input types  : {len(summary.input_types)}")
+    typer.echo(f"  Enums        : {len(summary.enums)}")
+    typer.echo(f"  Scalars      : {len(summary.scalars)}")
+    typer.echo(f"  Interfaces   : {len(summary.interfaces)}")
+    typer.echo(f"  Unions       : {len(summary.unions)}")
+    typer.echo(f"  Queries      : {len(summary.queries)}")
+    typer.echo(f"  Mutations    : {len(summary.mutations)}")

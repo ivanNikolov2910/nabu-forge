@@ -1,14 +1,16 @@
 import typer
 
-from nabu.cli.commands import inspect, validate, version
-from nabu.cli.debug import debug
+from nabu.cli.callbacks import verbose_callback
+from nabu.cli.commands import generate, inspect, validate, version
 
 app = typer.Typer(no_args_is_help=True)
 
 app.command()(version)
 app.command()(validate)
+app.command()(generate)
 app.command()(inspect)
-app.add_typer(debug, name="debug")
+
+app.callback()(verbose_callback)
 
 
 def main() -> None:

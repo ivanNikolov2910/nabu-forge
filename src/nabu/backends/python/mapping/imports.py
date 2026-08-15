@@ -1,0 +1,47 @@
+import re
+
+_BARE_IMPORT_MODULES = {"datetime", "decimal", "uuid", "pathlib", "enum"}
+_PYTHON_BASE_TYPES = ("None", "int", "float", "str", "bool", "list")
+
+
+class ImportCollector:
+    def __init__(self) -> None:
+        self._bare: set[str] = set()
+        self._from: dict[str, set[str]] = {}
+        self._relative: set[str] = set()
+
+    def add(self, annotation: str) -> str:
+        tokens = re.split(r"[\s|\[\],]+", annotation)
+        result = annotation
+        for token in tokens:
+            token = token.strip()
+            if not token or token in _PYTHON_BASE_TYPES:
+                continue
+            if "." in token:
+                module, name = token.split(".", 1)
+                module, name = module.strip(), name.strip()
+                if module in _BARE_IMPORT_MODULES:
+                    self._bare.add(module)
+                else:
+                    self._from.setdefault(module, set()).add(name)
+                    result = result.replace(token, name)
+        return result
+
+    def add_relative(self, module: str, name: str) -> None:
+        if module.startswith("."):
+            self._relative.add(f"from {module} import {name}")
+        else:
+            self._relative.add(f"from .{module} import {name}")
+
+    def render(self) -> str:
+        lines: list[str] = []
+        lines.extend(f"import {module}" for module in sorted(self._bare))
+        if self._bare and (self._from or self._relative):
+            lines.append("")
+        for module in sorted(self._from):
+            names = ", ".join(sorted(self._from[module]))
+            lines.append(f"from {module} import {names}")
+        if self._from and self._relative:
+            lines.append("")
+        lines.extend(sorted(self._relative))
+        return "\n".join(lines)

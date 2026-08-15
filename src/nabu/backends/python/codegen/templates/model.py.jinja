@@ -1,0 +1,26 @@
+# ruff: noqa: F821
+from __future__ import annotations
+
+from pydantic import BaseModel
+{% if imports %}
+{{ imports }}
+{% endif %}
+{% for model in models %}
+
+
+class {{ model.class_name }}(BaseModel):
+{%- if model.has_aliases %}
+    model_config = ConfigDict(populate_by_name=True)
+{%- endif %}
+{%- for field in model.fields %}
+    {{ field.name }}: {{ field.annotation }}{{ field.default }}
+{%- endfor %}
+{% endfor %}
+{% if union_aliases %}
+
+
+# Union type aliases — forward references resolved by 'from __future__ import annotations'
+{% for alias in union_aliases %}
+{{ alias.name }} = {{ alias.members }}
+{% endfor %}
+{% endif %}

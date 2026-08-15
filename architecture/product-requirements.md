@@ -2,129 +2,112 @@
 
 ## Minimum Viable Product
 
-The first useful version should support:
+The first useful version supports:
 
-* GraphQL SDL parsing through `graphql-core`;
-* GraphQL operation documents;
-* object types;
-* input types;
-* enums;
-* built-in scalars;
-* configurable custom scalars;
-* lists and nullability;
-* queries;
-* mutations;
-* Pydantic models;
-* asynchronous HTTP requests;
-* operation-specific response models;
-* basic diagnostics;
-* generated package exports.
+- GraphQL SDL parsing via `graphql-core`
+- GraphQL operation documents (queries + mutations)
+- Object types, input types, enums, scalars, interfaces, unions
+- Lists and nullability (all 8 combinations)
+- Custom scalars via `[scalars]` config
+- Inline fragments and named fragments
+- Discriminated unions for polymorphic types (`__typename`)
+- Shared interface-level fields alongside inline fragments
+- camelCase → snake_case field aliasing with correct wire serialization
+- Field aliases (including two aliases of the same underlying field)
+- Pydantic v2 models for schema types and operation response types
+- Async httpx client with operation methods, variable serialization, response deserialization
+- Compiler-style diagnostics with error codes, file/line/column, and hints
+- Deterministic, ruff-formatted output
 
-The MVP may initially exclude:
+The MVP intentionally excludes:
 
-* subscriptions;
-* federation;
-* file uploads;
-* schema extensions;
-* custom executable directives;
-* persisted queries;
-* automatic selection-set generation;
-* synchronous clients;
-* multiple target languages.
+- Subscriptions
+- File uploads (multipart)
+- Query batching
+- `@skip` / `@include` directives
+- Variable default values
+- Schema extensions or federation
+- Sync clients
 
 ---
 
 ## Final Product Requirements
 
-The final version of Nabu Forge should:
+Nabu Forge should:
 
 1. Parse GraphQL SDL and operation documents.
-2. Validate the schema and operations.
-3. Build a complete symbol table.
-4. Perform project-specific semantic analysis.
-5. Transform GraphQL definitions into a custom IR.
-6. Map GraphQL types into accurate Python types.
-7. Generate typed Python models.
-8. Generate typed query and mutation methods.
-9. Handle custom scalars.
-10. Handle interfaces and unions.
-11. Produce compiler-style diagnostics.
-12. Generate deterministic and formatted source code.
-13. Produce packages that pass Python compilation.
-14. Produce packages that pass static type checking.
-15. Include automated tests for the generated output.
+2. Validate the schema and operations — clear diagnostics on failure.
+3. Build a complete IR independent of `graphql-core`.
+4. Perform semantic analysis (type refs, scalars, fields, fragments, naming).
+5. Map GraphQL types into accurate Python annotations with correct nullability.
+6. Generate typed Pydantic v2 models for every response shape.
+7. Generate typed query and mutation client methods.
+8. Handle custom scalars via config.
+9. Handle interfaces and unions via discriminated union pattern.
+10. Inject `__typename` automatically — users write clean `.graphql` files.
+11. Produce compiler-style diagnostics that identify the problem, its location, and how to fix it.
+12. Generate deterministic, formatted source code.
+13. Produce packages that import cleanly and pass `ruff check`.
+14. Include automated tests covering the compiler pipeline end-to-end.
 
 ---
 
 ## Definition of Done
 
-The project can be considered complete when the following workflow succeeds:
+The project is complete when this workflow succeeds:
 
 ```bash
-nabu generate \
-    --schema schema.graphqls \
-    --operations operations/ \
-    --output generated_client/
+nabu generate --config nabu.toml
 ```
 
-The generated package should then support:
+And the generated package supports:
 
 ```python
 from generated_client import Client
 
-client = Client(url="https://example.com/graphql")
-
-result = await client.get_student(id="123")
-
-print(result.student.id)
+async with Client(url="https://example.com/graphql") as client:
+    result = await client.get_student(id="123")
+    print(result.student.id)
+    print(result.student.status)
 ```
 
-The package should:
+The package must:
 
-* contain no syntax errors;
-* pass formatting checks;
-* pass static type checking;
-* correctly serialize operation variables;
-* correctly deserialize GraphQL responses;
-* expose clear Python APIs;
-* report useful errors for invalid schemas and operations;
-* regenerate consistently without manual modifications.
-
----
-
-## Classification of the Project
-
-Nabu Forge can be described as:
-
-> A schema-driven, source-generating DSL compiler that translates GraphQL SDL and GraphQL operations into type-safe Python client packages.
-
-It is:
-
-* a translator in the broadest sense;
-* a compiler in formal-language terms;
-* a DSL compiler more specifically;
-* a source-code generator from an engineering perspective;
-* a model-to-text transformer in model-driven engineering.
-
-It is not primarily an interpreter because it does not execute the GraphQL schema directly. It analyses the source definitions and generates another program.
+- contain no syntax errors
+- pass `ruff check --select F`
+- correctly serialize operation variables (camelCase wire names)
+- correctly deserialize GraphQL responses (camelCase → snake_case)
+- resolve polymorphic responses to the correct concrete Pydantic model
+- report clear errors for invalid schemas and operations
+- regenerate consistently without manual modifications
+- not touch files whose content has not changed
 
 ---
 
-## Final Statement
+## Current State (as of Phase 11)
 
-`graphql-core` is sufficient for parsing and validating GraphQL SDL, but it is not sufficient for generating a complete Python client.
+**All MVP requirements are met.** Both sample schemas generate clean, importable clients:
 
-Nabu Forge must still implement:
+- `samples/university/` — 6 object types, 3 enums, 8 inputs, 14 operations including polymorphic search query
+- `samples/euporie/` — 47 model classes, 13 enums, 20 inputs, 4 union aliases, 7 operations
 
-* symbol resolution;
-* semantic analysis;
-* intermediate representation;
-* GraphQL-to-Python type translation;
-* operation analysis;
-* response-model construction;
-* client-method generation;
-* transport integration;
-* diagnostics;
-* generated-package architecture.
+Verified end-to-end against a live euporie SAP BTP instance:
+- JWT auth via UAA clientid/clientsecret
+- Pagination, camelCase aliases, datetime fields, discriminated union resolution
 
-The parser is therefore one reusable frontend component within a larger compiler system. The primary contribution of Nabu Forge lies in the semantic model, translation rules, intermediate representation, diagnostics, and Python code-generation backend.
+144 tests pass. `ruff check --select F` is clean on source and both generated samples.
+
+---
+
+## Classification
+
+Nabu Forge is:
+
+- A **compiler** in formal-language terms (parse → analyse → transform → generate)
+- A **DSL compiler** (source language: GraphQL SDL + operations; target language: Python)
+- A **source-code generator** from an engineering perspective
+- A **model-to-text transformer** in model-driven engineering
+
+It is not an interpreter — it does not execute the GraphQL schema. It analyses source definitions and generates another program.
+
+`graphql-core` is the frontend parser only. The primary contribution of Nabu Forge lies in the semantic model, type translation rules, IR, diagnostics, and Python code-generation backend.

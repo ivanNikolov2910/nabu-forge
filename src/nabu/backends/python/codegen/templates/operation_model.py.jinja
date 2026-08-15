@@ -1,0 +1,35 @@
+from __future__ import annotations
+
+from pydantic import BaseModel
+{% if imports %}
+{{ imports }}
+{% endif %}
+{% for entry in classes %}
+{% if entry.member_classes is defined %}
+
+
+{{ entry.alias_name }} = Annotated[
+    {{ entry.member_classes | join("\n    | ") }},
+    Field(discriminator="typename"),
+]
+{% else %}
+
+
+class {{ entry.class_name }}(BaseModel):
+{%- if entry.has_aliases %}
+    model_config = ConfigDict(populate_by_name=True)
+{%- endif %}
+{%- for field in entry.fields %}
+    {{ field.name }}: {{ field.annotation }}{{ field.default }}
+{%- endfor %}
+{% endif %}
+{% endfor %}
+
+
+class {{ result_class }}(BaseModel):
+{%- if result_has_aliases %}
+    model_config = ConfigDict(populate_by_name=True)
+{%- endif %}
+{%- for field in result_fields %}
+    {{ field.name }}: {{ field.annotation }}{{ field.default }}
+{%- endfor %}

@@ -71,3 +71,9 @@ def test_inspect_invalid_schema(tmp_path: Path) -> None:
     result = runner.invoke(app, ["inspect", "--schema", str(schema)])
 
     assert result.exit_code == 1
+
+
+def test_generate(university_config: Path) -> None:
+    result = runner.invoke(app, ["generate", "--config", str(university_config)])
+    assert result.exit_code == 0
+    assert "OK" in result.output

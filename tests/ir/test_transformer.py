@@ -1,8 +1,13 @@
 import dataclasses
 
-from graphql import OperationType, Source, build_schema, parse
+from graphql import Source, build_schema, parse
 
-from nabu.ir.operations import IRFragmentSpread, IRInlineFragment, IRVariableRef
+from nabu.ir.operations import (
+    IRFragmentSpread,
+    IRInlineFragment,
+    IROperationType,
+    IRVariableRef,
+)
 from nabu.ir.transformer import build_ir
 
 SCHEMA = """
@@ -90,7 +95,7 @@ def test_operation_with_variable_and_selection():
     doc = _ir("query GetStudent($id: ID!) { student(id: $id) { id name } }")
     op = doc.operations[0]
     assert op.name == "GetStudent"
-    assert op.operation_type == OperationType.QUERY
+    assert op.operation_type == IROperationType.QUERY
     assert op.variables[0].name == "id"
     field = op.selections[0]
     assert field.name == "student"
@@ -146,3 +151,25 @@ def test_empty_operations():
     doc = _ir()
     assert doc.operations == []
     assert doc.fragments == []
+
+
+def test_list_type_ref_in_operation():
+    doc = _ir("query Q($ids: [ID!]!) { student(id: $ids) { id } }")
+    var = doc.operations[0].variables[0]
+    from nabu.ir.types import ListTypeRef, NonNullTypeRef
+
+    assert isinstance(var.type_ref, NonNullTypeRef)
+    assert isinstance(var.type_ref.inner, ListTypeRef)
+
+
+def test_unsupported_selection_node_raises():
+    from nabu.ir.transformer import _selection
+
+    class FakeNode:
+        pass
+
+    try:
+        _selection(FakeNode())
+        assert False, "should have raised"
+    except TypeError as e:
+        assert "Unsupported selection node" in str(e)

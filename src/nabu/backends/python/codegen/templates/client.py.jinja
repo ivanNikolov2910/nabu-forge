@@ -1,0 +1,57 @@
+from __future__ import annotations
+
+from enum import Enum
+
+from pydantic import BaseModel
+
+from .exceptions import GraphQLResponseError
+from .transport import Transport
+{% for name in input_imports %}
+from .inputs import {{ name }}
+{%- endfor %}
+{% for imp in result_imports %}
+from .operations.{{ imp.module }} import {{ imp.result_class }}
+{%- endfor %}
+{% for op in operations %}
+{{ op.document_const }} = """
+{{ op.document_text }}
+"""
+{% endfor %}
+
+def _serialize(value: object) -> object:
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json", by_alias=True)
+    return value
+
+
+class Client:
+    def __init__(
+        self, url: str, headers: dict[str, str] | None = None, timeout: float = 30.0
+    ) -> None:
+        self._transport = Transport(url, headers, timeout)
+
+    async def __aenter__(self) -> "Client":
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        await self._transport.aclose()
+
+    {% for op in operations %}
+
+    async def {{ op.method_name }}(self{{ op.params }}) -> {{ op.result_class }}:
+        variables = {
+            {%- for var in op.variables %}
+            "{{ var.gql_name }}": _serialize({{ var.py_name }}),
+            {%- endfor %}
+        }
+        response = await self._transport.execute(
+            query={{ op.document_const }},
+            variables=variables,
+        )
+        if response.get("errors"):
+            raise GraphQLResponseError(response["errors"])
+        return {{ op.result_class }}.model_validate(response["data"])
+
+{% endfor %}
