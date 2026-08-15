@@ -3,7 +3,7 @@ from nabu.config.loader import Config
 from nabu.diagnostics.codes import ErrorCode
 from nabu.diagnostics.diagnostic import Diagnostic
 from nabu.diagnostics.result import Result
-from nabu.ir.definitions import IRObjectType, IRUnionType
+from nabu.ir.definitions import IRInterfaceType, IRObjectType, IRUnionType
 from nabu.ir.document import IRDocument
 from nabu.ir.location import SourceLocation
 from nabu.ir.operations import (

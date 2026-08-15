@@ -47,8 +47,11 @@ def generate(
     documents = ctx.parse_operations(schema)
     ir = ctx.build_ir(schema, documents)
     ctx.analyse(ir)
-    ctx.generate(ir)
-    typer.echo("OK")
+    stats, elapsed = ctx.generate(ir)
+    typer.echo(
+        f"OK  files={stats.total}  written={stats.written}"
+        f"  skipped={stats.skipped}  time={elapsed:.2f}s"
+    )
 
 
 def inspect(

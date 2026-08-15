@@ -4,16 +4,22 @@ import httpx
 
 
 class Transport:
-    def __init__(self, url: str, headers: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        url: str,
+        headers: dict[str, str] | None = None,
+        timeout: float = 30.0,
+    ) -> None:
         self._url = url
-        self._headers = headers or {}
+        self._client = httpx.AsyncClient(headers=headers or {}, timeout=timeout)
 
     async def execute(self, query: str, variables: dict | None = None) -> dict:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                self._url,
-                json={"query": query, "variables": variables or {}},
-                headers=self._headers,
-            )
-            response.raise_for_status()
-            return response.json()
+        response = await self._client.post(
+            self._url,
+            json={"query": query, "variables": variables or {}},
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def aclose(self) -> None:
+        await self._client.aclose()

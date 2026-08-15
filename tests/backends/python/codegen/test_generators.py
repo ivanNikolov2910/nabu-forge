@@ -219,8 +219,12 @@ def test_scalars_annotation_string_present(cfg):
 
 
 def test_writer_creates_files(tmp_path):
+    from nabu.backends.python.codegen.writer import WriteStats
     result = write_package(tmp_path, {"enums.py": "x = 1\n", "ops/a.py": "y = 2\n"})
     assert not result.failed
+    assert isinstance(result.value, WriteStats)
+    assert result.value.written == 2
+    assert result.value.skipped == 0
     assert (tmp_path / "enums.py").read_text() == "x = 1\n"
     assert (tmp_path / "ops" / "a.py").read_text() == "y = 2\n"
 
@@ -228,8 +232,10 @@ def test_writer_creates_files(tmp_path):
 def test_writer_skips_identical(tmp_path):
     write_package(tmp_path, {"enums.py": "x = 1\n"})
     mtime = (tmp_path / "enums.py").stat().st_mtime
-    write_package(tmp_path, {"enums.py": "x = 1\n"})
+    result = write_package(tmp_path, {"enums.py": "x = 1\n"})
     assert (tmp_path / "enums.py").stat().st_mtime == mtime
+    assert result.value.skipped == 1
+    assert result.value.written == 0
 
 
 def test_writer_overwrites_changed(tmp_path):
@@ -633,3 +639,75 @@ def test_exports_union_alias():
     d = build_ir(schema, []).value
     src = generate_exports(d)
     assert "from .models import Animal" in src
+
+
+def test_shared_interface_fields_in_all_union_members(cfg):
+    # Step 7: fields selected at the interface level must appear in every member class
+    schema = build_schema(Source("""
+    interface Animal { id: ID! name: String! }
+    type Cat implements Animal { id: ID! name: String! lives: Int! }
+    type Dog implements Animal { id: ID! name: String! breed: String }
+    union Pet = Cat | Dog
+    type Query { pet: Pet }
+    """, "s.graphqls"))
+    op = parse(Source("""
+    query GetPet {
+        pet {
+            ... on Cat { id name lives }
+            ... on Dog { id name breed }
+        }
+    }
+    """, "op.graphql"))
+    d = build_ir(schema, [op]).value
+    src = generate_operation(d.operations[0], d, cfg)
+    # shared fields id and name must appear in BOTH member classes
+    cat_block = src[src.index("class GetPetPetCat"):src.index("class GetPetPetDog")]
+    dog_block = src[src.index("class GetPetPetDog"):]
+    assert "id: str" in cat_block
+    assert "name: str" in cat_block
+    assert "id: str" in dog_block
+    assert "name: str" in dog_block
+
+
+def test_shared_interface_fields_without_repetition_in_fragments(cfg):
+    # Fields at interface level only (not repeated inside fragments) also work
+    schema = build_schema(Source("""
+    interface Node { id: ID! }
+    type A implements Node { id: ID! extra: String! }
+    type B implements Node { id: ID! other: Int }
+    union Thing = A | B
+    type Query { thing: Thing }
+    """, "s.graphqls"))
+    op = parse(Source("""
+    query GetThing {
+        thing {
+            id
+            ... on A { extra }
+            ... on B { other }
+        }
+    }
+    """, "op.graphql"))
+    d = build_ir(schema, [op]).value
+    src = generate_operation(d.operations[0], d, cfg)
+    # id is a shared field — must appear in both GetThingThingA and GetThingThingB
+    assert src.count("id: str") >= 2
+
+
+def test_two_aliases_of_same_field_get_distinct_python_fields(cfg):
+    # Step 8: activeJobs and failedJobs alias the same field — both need their own alias
+    schema = build_schema(Source("""
+    type JobPage { totalElements: Int! }
+    type Query { jobsPaged: JobPage! }
+    """, "s.graphqls"))
+    op = parse(Source("""
+    query Dashboard {
+        activeJobs: jobsPaged { totalElements }
+        failedJobs: jobsPaged { totalElements }
+    }
+    """, "op.graphql"))
+    d = build_ir(schema, [op]).value
+    src = generate_operation(d.operations[0], d, cfg)
+    assert 'alias="activeJobs"' in src
+    assert 'alias="failedJobs"' in src
+    assert "active_jobs:" in src
+    assert "failed_jobs:" in src

@@ -12,8 +12,13 @@ from nabu.ir.types import NonNullTypeRef, unwrap_to_named
 from nabu.log import logger
 
 _OPERATION_START = re.compile(r"\b(query|mutation|subscription)\s+(\w+)")
+_INLINE_FRAG = re.compile(r"(\.\.\.\s+on\s+\w+\s*\{)")
 _FRAGMENT_SPREAD = re.compile(r"\.\.\.\s*(\w+)")
 _FRAGMENT_DEF = re.compile(r"\bfragment\s+(\w+)\b")
+
+
+def _inject_typename(document: str) -> str:
+    return _INLINE_FRAG.sub(r"\1\n        __typename", document)
 
 
 def _extract_block(text: str, start: int) -> str:
@@ -50,7 +55,7 @@ def _operation_documents(operations_files: list[Path]) -> dict[str, str]:
                 seen.add(frag)
                 needed.append(fragments[frag])
                 pending.extend(_FRAGMENT_SPREAD.findall(fragments[frag]))
-            documents[operation_name] = "\n\n".join([block, *needed])
+            documents[operation_name] = _inject_typename("\n\n".join([block, *needed]))
     return documents
 
 

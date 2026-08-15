@@ -27,8 +27,16 @@ def _serialize(value: object) -> object:
 
 
 class Client:
-    def __init__(self, url: str, headers: dict[str, str] | None = None) -> None:
-        self._transport = Transport(url, headers)
+    def __init__(
+        self, url: str, headers: dict[str, str] | None = None, timeout: float = 30.0
+    ) -> None:
+        self._transport = Transport(url, headers, timeout)
+
+    async def __aenter__(self) -> "Client":
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        await self._transport.aclose()
 
     {% for op in operations %}
 

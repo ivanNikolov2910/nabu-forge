@@ -1,3 +1,4 @@
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -53,7 +54,7 @@ class CompilerContext:
         logger.info("Running semantic analysis")
         return self.reporter.collect(analyse(document, self.config))
 
-    def generate(self, document: IRDocument) -> None:
+    def generate(self, document: IRDocument) -> tuple:
         from nabu.backends.python.codegen.client_gen import generate_client
         from nabu.backends.python.codegen.enum_gen import generate_enums
         from nabu.backends.python.codegen.exceptions_gen import generate_exceptions
@@ -75,6 +76,7 @@ class CompilerContext:
             len(document.objects),
             len(document.operations),
         )
+        start_time = time.monotonic()
         ops = generate_operations(document, self.config)
         files: dict[str, str] = {
             "enums.py": generate_enums(document),
@@ -90,4 +92,5 @@ class CompilerContext:
             files[f"operations/{rel_path}"] = content
 
         logger.info("Writing %d files to %s", len(files), output)
-        self.reporter.collect(write_package(output, files))
+        stats = self.reporter.collect(write_package(output, files))
+        return stats, time.monotonic() - start_time

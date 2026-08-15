@@ -51,7 +51,7 @@ def wrap_annotation(type_ref: TypeRef, leaf: str) -> str:
     return _inner(type_ref)
 
 
-def build_field(
+def build_field_spec(
     ir_field: IRField,
     scalars: dict[str, str],
     enum_names: set[str],
@@ -80,7 +80,7 @@ def build_field(
     return FieldSpec(name=snake, annotation=annotation, default=default)
 
 
-def build_fields(
+def build_fields_specs(
     ir_fields: list[IRField],
     scalars: dict[str, str],
     enum_names: set[str],
@@ -88,9 +88,28 @@ def build_fields(
     enums_module: str = "enums",
 ) -> list[FieldSpec]:
     return [
-        build_field(f, scalars, enum_names, collector, enums_module) for f in ir_fields
+        build_field_spec(f, scalars, enum_names, collector, enums_module)
+        for f in ir_fields
     ]
 
 
 def needs_model_config(fields: list[FieldSpec]) -> bool:
     return any("alias=" in f.default for f in fields)
+
+
+def build_class_spec(
+    ir_type,
+    scalars: dict[str, str],
+    enum_names: set[str],
+    collector: ImportCollector,
+    enums_module: str = "enums",
+) -> ClassSpec:
+    fields = build_fields_specs(
+        ir_type.fields, scalars, enum_names, collector, enums_module
+    )
+    has_aliases = needs_model_config(fields)
+    if has_aliases:
+        collector.add("pydantic.ConfigDict")
+    return ClassSpec(
+        class_name=to_class_name(ir_type.name), fields=fields, has_aliases=has_aliases
+    )

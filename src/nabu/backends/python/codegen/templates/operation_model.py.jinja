@@ -5,7 +5,14 @@ from pydantic import BaseModel
 {{ imports }}
 {% endif %}
 {% for entry in classes %}
-{% if entry.kind == "class" %}
+{% if entry.member_classes is defined %}
+
+
+{{ entry.alias_name }} = Annotated[
+    {{ entry.member_classes | join("\n    | ") }},
+    Field(discriminator="typename"),
+]
+{% else %}
 
 
 class {{ entry.class_name }}(BaseModel):
@@ -15,13 +22,6 @@ class {{ entry.class_name }}(BaseModel):
 {%- for field in entry.fields %}
     {{ field.name }}: {{ field.annotation }}{{ field.default }}
 {%- endfor %}
-{% elif entry.kind == "union" %}
-
-
-{{ entry.alias_name }} = Annotated[
-    {{ entry.members | join("\n    | ") }},
-    Field(discriminator="typename"),
-]
 {% endif %}
 {% endfor %}
 

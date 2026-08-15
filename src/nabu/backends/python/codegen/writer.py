@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from pathlib import Path
 
 from nabu.diagnostics.codes import ErrorCode
@@ -5,8 +6,19 @@ from nabu.diagnostics.diagnostic import Diagnostic
 from nabu.diagnostics.result import Result
 
 
-def write_package(output_dir: Path, files: dict[str, str]) -> Result[None]:
+@dataclass(frozen=True)
+class WriteStats:
+    written: int
+    skipped: int
+
+    @property
+    def total(self) -> int:
+        return self.written + self.skipped
+
+
+def write_package(output_dir: Path, files: dict[str, str]) -> Result[WriteStats]:
     diagnostics: list[Diagnostic] = []
+    written = skipped = 0
     try:
         expected = {Path(rel) for rel in files}
 
@@ -20,8 +32,10 @@ def write_package(output_dir: Path, files: dict[str, str]) -> Result[None]:
             path = output_dir / rel_path
             path.parent.mkdir(parents=True, exist_ok=True)
             if path.exists() and path.read_text(encoding="utf-8") == content:
+                skipped += 1
                 continue
             path.write_text(content, encoding="utf-8")
+            written += 1
 
     except OSError as e:
         diagnostics.append(
@@ -31,4 +45,4 @@ def write_package(output_dir: Path, files: dict[str, str]) -> Result[None]:
                 message=f"Failed to write generated package: {e}",
             )
         )
-    return Result(value=None, diagnostics=diagnostics)
+    return Result(value=WriteStats(written=written, skipped=skipped), diagnostics=diagnostics)
