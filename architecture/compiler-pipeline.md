@@ -1,342 +1,128 @@
 # Compiler Pipeline
 
-The proposed compiler pipeline is:
-
-<img src="./assets/compiler-pipeline.drawio.png" alt="Compiler Pipeline" width="600" />
-
-Each stage has a specific responsibility.
+Nabu Forge implements a four-stage compiler pipeline. Each stage has a single responsibility and communicates with the
+next via a well-defined data structure.
 
 ---
 
-## 1. GraphQL SDL Input
+## Stage 1 — Parse
 
-The source language of the compiler is GraphQL Schema Definition Language.
+**Input:** paths to SDL file and operation `.graphql` files  
+**Output:** `GraphQLSchema` + `list[DocumentNode]`  
+**Library:** `graphql-core >= 3.2`
 
-Example:
+Responsibilities:
 
-```graphql
-scalar DateTime
+- Lexical analysis and parsing of GraphQL SDL
+- Construction of the GraphQL schema model
+- Parsing of operation documents
+- Validation of operations against the schema (field existence, argument types, fragment compatibility)
 
-enum EnrollmentStatus {
-    ENROLLED
-    ACTIVE
-    GRADUATED
-    WITHDRAWN
-}
-
-type Student {
-    id: ID!
-    status: EnrollmentStatus!
-    createdAt: DateTime!
-}
-
-type Query {
-    student(id: ID!): Student
-}
-```
-
-The schema defines:
-
-* object types;
-* input types;
-* enums;
-* scalars;
-* interfaces;
-* unions;
-* queries;
-* mutations;
-* field arguments;
-* list structures;
-* field nullability.
-
-The schema describes what the API supports, but it does not contain enough information to generate precise response
-models for every possible operation.
-
-For this reason, Nabu Forge should also support GraphQL operation documents.
-
-Example:
-
-```graphql
-query GetStudent($id: ID!) {
-    student(id: $id) {
-        id
-        status
-        createdAt
-    }
-}
-```
+Errors at this stage have codes E010–E013.
 
 ---
 
-## 2. Parsing with `graphql-core`
+## Stage 2 — Build IR
 
-The `graphql-core` library should be used as the GraphQL frontend parser.
+**Input:** `GraphQLSchema` + `list[DocumentNode]`  
+**Output:** `IRDocument`  
+**Module:** `nabu.ir.transformer`
 
-Example:
+The IR (Intermediate Representation) is the project's internal schema model, completely independent of `graphql-core`.
+No graphql types cross this boundary into later stages.
 
-```python
-from graphql import parse
+Key IR types:
 
-document = parse(schema_source)
-```
+| IR type            | Description                                                      |
+|--------------------|------------------------------------------------------------------|
+| `NamedTypeRef`     | A named leaf type (String, MyEnum, etc.)                         |
+| `ListTypeRef`      | A list wrapper around another TypeRef                            |
+| `NonNullTypeRef`   | A non-null wrapper around another TypeRef                        |
+| `IRObjectType`     | A GraphQL object type with fields and interface list             |
+| `IRInterfaceType`  | A GraphQL interface                                              |
+| `IRUnionType`      | A GraphQL union and its member type names                        |
+| `IREnumType`       | An enum with its values                                          |
+| `IRInputType`      | An input object type                                             |
+| `IRScalarType`     | A scalar (builtin flag + name)                                   |
+| `IROperation`      | A query or mutation with variables and selections                |
+| `IRFragment`       | A named fragment definition                                      |
+| `IRFieldSelection` | A field selected in an operation (with alias and sub-selections) |
+| `IRInlineFragment` | An inline `... on TypeName { }` fragment                         |
+| `IRFragmentSpread` | A `...FragmentName` spread                                       |
 
-The library is responsible for:
-
-* lexical analysis;
-* parsing GraphQL syntax;
-* producing a GraphQL AST;
-* validating standard GraphQL syntax;
-* constructing a GraphQL schema model;
-* validating operations against the schema.
-
-Nabu Forge does not need to implement a complete GraphQL parser unless parser construction becomes a separate academic
-goal.
-
-Using an existing parser does not make the project a simple wrapper. The parser is only the frontend component of the
-complete compiler pipeline.
-
----
-
-## 3. Abstract Syntax Tree
-
-The parser converts the GraphQL source text into an Abstract Syntax Tree.
-
-Conceptually, the following schema:
-
-```graphql
-type User {
-    id: ID!
-    name: String
-}
-```
-
-may be represented as:
-
-<img src="./assets/ast.drawio.png" alt="AST" width="400" />
-
-The AST represents the syntax and structure of the GraphQL document.
-
-The AST should not be used directly throughout the complete generator. It should be transformed into a project-specific
-semantic model.
+`IRDocument` carries all of the above in typed lists (`objects`, `inputs`, `enums`, `scalars`, `interfaces`, `unions`,
+`operations`, `fragments`, `query_fields`, `mutation_fields`).
 
 ---
 
-## 4. Symbol Table
+## Stage 3 — Semantic Analysis
 
-The symbol table stores all declared GraphQL entities and their relationships.
+**Input:** `IRDocument` + `Config`  
+**Output:** `IRDocument` (same, unchanged) + diagnostics  
+**Module:** `nabu.analysis.analyser`
 
-It should contain entries for:
+Validates project-specific constraints that go beyond what GraphQL syntax validation covers:
 
-* object types;
-* input types;
-* enums;
-* scalar types;
-* interfaces;
-* unions;
-* directives;
-* query fields;
-* mutation fields;
-* operation fragments.
+| Check                                        | Codes     |
+|----------------------------------------------|-----------|
+| All type references resolve to defined types | E020      |
+| Custom scalars have a `[scalars]` mapping    | E021      |
+| Operation variables reference defined types  | E022      |
+| Selected fields exist on their parent types  | E023      |
+| Fragment spreads reference defined fragments | E024      |
+| Inline fragment targets are defined types    | E025      |
+| Generated Python names do not collide        | E026–E027 |
+| Subscriptions are rejected (not supported)   | E028      |
 
-Example conceptual structure:
-
-```python
-symbol_table = {
-    "Student": ObjectTypeSymbol(...),
-    "EnrollmentStatus": EnumTypeSymbol(...),
-    "DateTime": ScalarTypeSymbol(...),
-    "Query": ObjectTypeSymbol(...),
-}
-```
-
-The symbol table enables the compiler to resolve references such as:
-
-```graphql
-type Student {
-    status: EnrollmentStatus!
-}
-```
-
-Here, `EnrollmentStatus` must be resolved to the corresponding enum definition.
-
-The symbol table should also support:
-
-* duplicate-definition detection;
-* unknown-type detection;
-* interface implementation lookup;
-* union member lookup;
-* operation and fragment resolution;
-* dependency ordering between generated models.
+The `IRIndex` class provides O(1) type and field lookup across the IR during analysis.
 
 ---
 
-## 5. Semantic Analysis
+## Stage 4 — Code Generation
 
-Semantic analysis verifies that the parsed GraphQL definitions can be translated into valid Python client code.
+**Input:** `IRDocument` + `Config`  
+**Output:** `dict[str, str]` (relative path → source code)  
+**Modules:** `nabu.backends.python.codegen.*`
 
-This stage should validate project-specific rules that are outside the responsibilities of basic GraphQL parsing.
+Each generator produces one file:
 
-Possible semantic checks include:
+| Generator        | Output file            | Content                                            |
+|------------------|------------------------|----------------------------------------------------|
+| `enum_gen`       | `enums.py`             | `str, Enum` classes                                |
+| `input_gen`      | `inputs.py`            | Pydantic v2 input models                           |
+| `model_gen`      | `models.py`            | Pydantic v2 schema models + union aliases          |
+| `scalars_gen`    | `scalars.py`           | `SCALAR_MAP` dict                                  |
+| `transport_gen`  | `transport.py`         | `Transport(url, headers, timeout)` class           |
+| `exceptions_gen` | `exceptions.py`        | `GraphQLResponseError`                             |
+| `client_gen`     | `client.py`            | `Client` class with one async method per operation |
+| `exports_gen`    | `__init__.py`          | Re-exports all public types and `Client`           |
+| `operation_gen`  | `operations/<name>.py` | `<Op>Result` + nested model classes                |
 
-* every referenced type exists;
-* custom scalars have configured Python mappings;
-* operation variables match schema argument types;
-* selected fields exist on their parent types;
-* fragments are applied to compatible types;
-* interfaces and unions include valid concrete types;
-* generated Python names do not conflict;
-* cyclic model dependencies are handled;
-* required operation arguments are present;
-* unsupported GraphQL features produce clear diagnostics.
+Templates are Jinja2 files in `nabu/backends/python/codegen/templates/`. After rendering, each file is passed through
+`ruff check --select F --fix` (remove unused imports) then `ruff format` (formatting). All generated files are
+ruff-clean.
 
-Example diagnostic:
+### Key design decisions
 
-```text
-error[NF1004]: No Python mapping exists for custom scalar "DateTime".
+**camelCase → snake_case aliasing.** Every field whose wire name differs from its Python name gets
+`Field(alias="wireName")` and its class gets `model_config = ConfigDict(populate_by_name=True)`. Input models serialize
+with `model_dump(by_alias=True)` so wire names are sent to the server.
 
-  schema.graphql:14:16
-    createdAt: DateTime!
-               ^^^^^^^^
+**Discriminated union for polymorphic types.** When a field returns a union or interface and inline fragments are
+present, the generator produces one member class per fragment (each with
+`typename: Literal["TypeName"] = Field(alias="__typename")`), then a module-level
+`Annotated[A | B, Field(discriminator="typename")]` alias. `__typename` is injected automatically into the sent GraphQL
+document via `_inject_typename` in `client_gen`.
 
-Add a scalar mapping in nabu.toml:
+**Shared interface fields.** Fields selected at the interface level alongside `... on` fragments are prepended to every
+member class's selection. Users do not need to repeat shared fields inside each fragment.
 
-[scalars]
-DateTime = "datetime.datetime"
-```
+**Fragment inlining.** Named fragment spreads are fully resolved at code-generation time. The `_inline_fragments` pass
+replaces every `IRFragmentSpread` with the fragment's selections before walking the selection tree.
 
-Semantic analysis should produce clear errors before code generation begins.
+**Deterministic output.** Generation order is controlled by `dependency_order` (topological sort over field types).
+Declaration-order lists prevent PYTHONHASHSEED-sensitive output.
 
----
-
-## 6. Custom Intermediate Representation
-
-The GraphQL AST should be converted into a custom Intermediate Representation.
-
-The IR should be independent of the original parser and should represent the information needed for code generation.
-
-Example:
-
-```python
-from dataclasses import dataclass
-
-
-@dataclass(frozen=True)
-class NamedType:
-    name: str
-
-
-@dataclass(frozen=True)
-class ListType:
-    item_type: "TypeReference"
-
-
-@dataclass(frozen=True)
-class NonNullType:
-    inner_type: "TypeReference"
-
-
-@dataclass
-class FieldDefinition:
-    name: str
-    type_reference: "TypeReference"
-
-
-@dataclass
-class ObjectDefinition:
-    name: str
-    fields: list[FieldDefinition]
-    interfaces: list[str]
-```
-
-The IR may also contain code-generation decisions such as:
-
-* resolved Python names;
-* resolved module names;
-* Python type annotations;
-* import dependencies;
-* scalar serializers;
-* scalar deserializers;
-* model dependency order;
-* operation request documents;
-* operation result models.
-
-The IR separates GraphQL-specific parsing concerns from Python-specific generation concerns.
-
-This makes the architecture easier to test and extend.
-
-Future backends could reuse the same IR.
-
----
-
-## 7. Python Type Mapping
-
-The Python type mapper translates GraphQL types into Python type annotations.
-
-Basic scalar mappings may include:
-
-| GraphQL type | Python type         |
-|--------------|---------------------|
-| `String`     | `str`               |
-| `ID`         | `str`               |
-| `Int`        | `int`               |
-| `Float`      | `float`             |
-| `Boolean`    | `bool`              |
-| `DateTime`   | `datetime.datetime` |
-| `JSON`       | `typing.Any`        |
-| `Void`       | `None`              |
-
-Custom scalar mappings should be configurable.
-
-Example:
-
-```toml
-[scalars]
-DateTime = "datetime.datetime"
-JSON = "typing.Any"
-Void = "None"
-```
-
-### Nullability mapping
-
-GraphQL nullability must be preserved accurately.
-
-| GraphQL type | Python type                 |
-|--------------|-----------------------------|
-| `String`     | `str \| None`               |
-| `String!`    | `str`                       |
-| `[String]`   | `list[str \| None] \| None` |
-| `[String!]`  | `list[str] \| None`         |
-| `[String]!`  | `list[str \| None]`         |
-| `[String!]!` | `list[str]`                 |
-
-The type mapper should work recursively so that nested list and non-null structures are handled correctly.
-
----
-
-## 8. Code Generation
-
-The code-generation stage transforms the IR into Python source files.
-
-The generator should produce:
-
-* Python models;
-* enums;
-* input types;
-* operation result types;
-* client methods;
-* transport code;
-* scalar conversion functions;
-* package exports;
-* generated metadata.
-
-Possible generation technologies include:
-
-* Jinja templates;
-* Python AST generation;
-* structured source-code builders;
-* direct text generation with formatting.
-
-The generated files should be passed through a formatter such as `ruff format` or `black`.
-
-The generator should produce deterministic output. Running the generator multiple times with the same input should
-result in identical files.
+**`_GenContext` for recursive generation.** The `_selection_fields` function carries seven invariant parameters in a
+frozen `_GenContext` dataclass. Only the three varying parameters (selections, parent_type, prefix) are passed at each
+recursive call site.
