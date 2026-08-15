@@ -9,6 +9,7 @@ dependencies = [
     "typer>=0.27.1",
     "graphql-core>=3.2",
     "jinja2>=3.1.6",
+    "pydantic>=2.0",
     "httpx>=0.26.2"
 ]
 
